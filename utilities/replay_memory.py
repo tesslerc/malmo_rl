@@ -1,7 +1,6 @@
 import argparse
-from collections import namedtuple
-
 import numpy as np
+from collections import namedtuple
 
 # Definition of observation:
 #   state:    s_t
@@ -38,8 +37,9 @@ class ReplayMemory(object):
         # sure the next state exists.
         training_samples = np.random.choice(3, self.elements_in_memory - 1, self.batch_size)
         for index in range(self.batch_size):
-            while (self.memory[training_samples[index - 1]].terminal is True or
-                   self.memory[training_samples[index]].terminal_due_to_timeout is True):
+            while self.memory[training_samples[index]].terminal_due_to_timeout:
+                # We do not learn from termination states due to timeout. Timeout is an artificial addition to make sure
+                # episodes end and the train/test procedure continues.
                 training_samples[index] = np.random.choice(3, self.elements_in_memory - 1)
 
             obs = self.memory[training_samples[index]]
@@ -60,7 +60,7 @@ class ReplayMemory(object):
         saw_terminal = False
         for i in range(0, self.params.state_size):
             if saw_terminal:
-                state.insert(0, self.memory[final_index].state)
+                state.insert(0, np.zeros_like(self.memory[final_index].state))
             else:
                 state.insert(0, self.memory[final_index - i].state)
             if self.memory[final_index - i].terminal:
