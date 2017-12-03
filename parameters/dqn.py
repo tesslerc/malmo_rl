@@ -3,7 +3,8 @@ from parameters.base_parameters import parser as base_parser
 parser = base_parser
 parser.add_argument('--epsilon_start', type=float, default=1.0)
 parser.add_argument('--epsilon_end', type=float, default=0.1)
-parser.add_argument('--epsilon_test', type=float, default=0.05)
+parser.add_argument('--epsilon_test', type=float, default=0.05,
+                    help='(Chance/100)% of selecting a random action during the evaluation phases.')
 parser.add_argument('--epsilon_decay', type=int, default=100000)
 parser.add_argument('--target_update_interval', type=int, default=10000)
 parser.add_argument('--actively_follow_target', default=False, action='store_true',
