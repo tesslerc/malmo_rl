@@ -19,7 +19,7 @@
         <AllowSpawning>false</AllowSpawning>
        </ServerInitialConditions>
     <ServerHandlers>
-        <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" forceReset="false"/>
+        <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1"/>
       <ClassroomDecorator seed="__SEED__">
         <specification>
           <width>7</width>
@@ -73,7 +73,7 @@
       <AgentQuitFromTouchingBlockType>
         <Block type="gold_block diamond_block redstone_block" description="found_goal" />
       </AgentQuitFromTouchingBlockType>
-        <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="20"/>
+        <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="50"/>
     </AgentHandlers>
   </AgentSection>
 </Mission>
