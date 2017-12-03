@@ -33,35 +33,33 @@ class Policy(AbstractPolicy):
         self.max_reward: int = None
 
         self.previous_action: int = None
-        self.previous_observation: np.ndarray = None
+        self.previous_state: np.ndarray = None
 
         self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
                                       dtype=np.float32)
 
-    def get_action(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, observation: np.ndarray,
-                   is_train: bool) -> Tuple[int, Dict[str, float]]:
+    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
         # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
         self.max_reward = max(self.max_reward, abs(reward)) if self.max_reward is not None else abs(reward)
         if self.params.normalize_reward:
             reward = reward * 1.0 / self.max_reward
-
-        log_dict = {}
-        if self.step > self.params.learn_start and is_train:
-            log_dict = self.train()
-
         if self.previous_action is not None and is_train:
-            self.replay_memory.add_observation(self.previous_observation, self.previous_action, reward,
+            self.replay_memory.add_observation(self.previous_state, self.previous_action, reward,
                                                1 if terminal else 0, terminal_due_to_timeout)
-
         if terminal:
             self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
                                           dtype=np.float32)
 
+    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[int, Dict[str, float]]:
+        log_dict = {}
+        if self.step > self.params.learn_start and is_train:
+            log_dict = self.train()
+
         # Normalize pixel values to [0,1] range.
-        observation = np.array(observation).reshape(self.params.image_width, self.params.image_height) / 255.0
+        state = np.array(state).reshape(self.params.image_width, self.params.image_height) / 255.0
 
         self.current_state[:(self.params.state_size - 1)] = self.current_state[1:]
-        self.current_state[-1] = observation
+        self.current_state[-1] = state
 
         if is_train:
             # Decrease epsilon value
@@ -84,7 +82,7 @@ class Policy(AbstractPolicy):
             action = self.model(Variable(state, volatile=True)).data.max(1)[1].cpu()
 
         if is_train:
-            self.previous_action, self.previous_observation = action, observation
+            self.previous_action, self.previous_state = action, state
         return action[0], log_dict
 
     def update_target_network(self) -> None:

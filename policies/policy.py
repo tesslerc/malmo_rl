@@ -14,8 +14,11 @@ class Policy(ABC):
         self.params: argparse = params
 
     @abstractmethod
-    def get_action(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, observation: np.ndarray,
-                   is_train: bool) -> Tuple[int, Dict[str, float]]:
+    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[int, Dict[str, float]]:
         # An agent which wishes to learn from terminal_due_to_timeout, should set this value to False on all
         # occurrences. This way the replay_memory and other utilities will not treat those transitions as different.
+        pass
+
+    @abstractmethod
+    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
         pass
