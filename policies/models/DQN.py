@@ -6,7 +6,8 @@ class DQN(nn.Module):
     """Implements a 3 layer convolutional network with 2 fully connected layers at the end as explained by:
     Mnih et al. (2013) - https://arxiv.org/abs/1312.5602
     """
-    def __init__(self, n_action):
+
+    def __init__(self, n_action: int):
         super(DQN, self).__init__()
         self.n_action = n_action
 

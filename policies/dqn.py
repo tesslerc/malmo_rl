@@ -1,24 +1,26 @@
+import argparse
 import copy
 import math
-from collections import deque
-import numpy as np
 from random import random, randrange
+from typing import Dict, Tuple
+
+import numpy as np
 import torch
 from torch import optim
 from torch.autograd import Variable
 
-from policies.policy import Policy as AbstractPolicy
 from policies.models.DQN import DQN
+from policies.policy import Policy as AbstractPolicy
 from utilities.replay_memory import ReplayMemory
 
 
 class Policy(AbstractPolicy):
-    def __init__(self, params):
+    def __init__(self, params: argparse) -> None:
         super(Policy, self).__init__(params)
-        self.step = 0
-        self.best_score = None
+        self.step: int = 0
+        self.best_score: float = None
 
-        self.cuda = torch.cuda.is_available()
+        self.cuda: bool = torch.cuda.is_available()
         self.model = DQN(self.params.num_actions)
         if self.cuda:
             self.model.cuda()
@@ -28,23 +30,30 @@ class Policy(AbstractPolicy):
         self.criterion = torch.nn.MSELoss()
         self.replay_memory = ReplayMemory(self.params)
 
-        self.previous_action = None
-        self.previous_observation = None
-        self.reward = None
-        self.terminal = None
+        self.max_reward: int = None
+
+        self.previous_action: int = None
+        self.previous_observation: np.ndarray = None
 
         self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
                                       dtype=np.float32)
 
-    def get_action(self, reward, terminal, observation, is_train):
+    def get_action(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, observation: np.ndarray,
+                   is_train: bool) -> Tuple[int, Dict[str, float]]:
+        # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
+        self.max_reward = max(self.max_reward, abs(reward)) if self.max_reward is not None else abs(reward)
+        if self.params.normalize_reward:
+            reward = reward * 1.0 / self.max_reward
+
+        log_dict = {}
         if self.step > self.params.learn_start and is_train:
-            self.train()
+            log_dict = self.train()
 
         if self.previous_action is not None and is_train:
             self.replay_memory.add_observation(self.previous_observation, self.previous_action, reward,
-                                               1 if terminal else 0)
+                                               1 if terminal else 0, terminal_due_to_timeout)
 
-        if self.terminal:
+        if terminal:
             self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
                                           dtype=np.float32)
 
@@ -69,16 +78,16 @@ class Policy(AbstractPolicy):
             # Random Action
             action = torch.IntTensor([randrange(self.params.num_actions)])
         else:
-            state = torch.from_numpy(self.current_state).unsqueeze(0)
+            state = torch.from_numpy(self.current_state).unsqueeze(0)  # Unsqueeze adds the batch dimension.
             if self.cuda:
                 state = state.cuda()
             action = self.model(Variable(state, volatile=True)).data.max(1)[1].cpu()
 
         if is_train:
             self.previous_action, self.previous_observation = action, observation
-        return action[0]
+        return action[0], log_dict
 
-    def update_target_network(self):
+    def update_target_network(self) -> None:
         if self.step % self.params.target_update_interval == 0 or self.params.actively_follow_target:
             if self.params.actively_follow_target:
                 params_target = self.target_model.named_parameters()
@@ -95,7 +104,7 @@ class Policy(AbstractPolicy):
             else:
                 self.model = copy.deepcopy(self.target_model)
 
-    def train(self):
+    def train(self) -> Dict[str, float]:
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state = self.replay_memory.sample()
         batch_state = Variable(torch.from_numpy(np.array(batch_state)).type(torch.FloatTensor))
         batch_action = Variable(torch.stack(batch_action)).type(torch.LongTensor)
@@ -113,20 +122,24 @@ class Policy(AbstractPolicy):
         self.optimizer.zero_grad()
 
         # Calculate expected Q values.
-        current_Q_values = self.target_model(batch_state).gather(1, batch_action)
+        current_Q = self.target_model(batch_state).gather(1, batch_action)
 
-        # Calculate 1 step Q expectation: Q'(s) = r + max_a {Q(s+1)}.
-        # TD error is current_Q_values - target_Q_values.
-        next_max_Q = self.target_model(batch_next_state).detach().max(1)[0]
-        next_Q_values = not_done_mask * next_max_Q
-
-        target_Q_values = batch_reward + (self.params.gamma * next_Q_values)
+        # Calculate 1 step Q expectation: Q'(s) = r + gamma * max_a {Q(s+1)}.
+        # Loss is: 0.5*(current_Q_values - target_Q_values)^2.
+        # TD error is: current_Q_values - target_Q_values.
+        if self.params.double_dqn:
+            next_max_Q = self.model(batch_next_state).detach().max(1)[0]
+        else:
+            next_max_Q = self.target_model(batch_next_state).detach().max(1)[0]
+        next_Q = not_done_mask * next_max_Q
+        target_Q = batch_reward + (self.params.gamma * next_Q)
 
         # Calculate the loss and propagate the gradients.
-        loss = self.criterion(current_Q_values, target_Q_values)
+        loss = self.criterion(current_Q, target_Q)
         loss.backward()
+
         if self.params.gradient_clipping > 0:
             torch.nn.utils.clip_grad_norm(self.target_model.parameters(), self.params.gradient_clipping)
         self.optimizer.step()
 
-# TODO: Double Q Learning.
+        return {'loss': loss.data[0], 'td_error': (current_Q - target_Q).mean().data[0]}

@@ -19,3 +19,5 @@ parser.add_argument('--gamma', type=float, default=0.99)
 parser.add_argument('--gradient_clipping', type=float, default=1.0,
                     help='For no gradient clipping set to 0. Any other value will clip all gradients to +\- gradient_clipping.')
 parser.add_argument('--learn_start', type=int, default=50)
+parser.add_argument('--double_dqn', default=False, action='store_true')
+parser.add_argument('--normalize_reward', default=False, action='store_true')

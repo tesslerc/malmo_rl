@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<Mission xmlns="http://ProjectMalmo.microsoft.com">
   <About>
     <Summary>Find the goal!</Summary>
   </About>
 
   <ModSettings>
-    <MsPerTick>2</MsPerTick>
+      <MsPerTick>400</MsPerTick>
     <PrioritiseOffscreenRendering>true</PrioritiseOffscreenRendering>
   </ModSettings>
 
@@ -19,7 +19,7 @@
         <AllowSpawning>false</AllowSpawning>
        </ServerInitialConditions>
     <ServerHandlers>
-      <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" />
+        <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" forceReset="false"/>
       <ClassroomDecorator seed="__SEED__">
         <specification>
           <width>7</width>
@@ -63,7 +63,8 @@
       <ObservationFromFullStats />
       <DiscreteMovementCommands autoFall="true"/>
       <RewardForMissionEnd rewardForDeath="-10000">
-        <Reward description="found_goal" reward="1000" />
+          <Reward description="found_goal" reward="0"/>
+          <Reward description="command_quota_reached" reward="-5"/>
       </RewardForMissionEnd>
       <RewardForTouchingBlockType>
         <Block type="gold_ore diamond_ore redstone_ore" reward="20" />
@@ -72,6 +73,7 @@
       <AgentQuitFromTouchingBlockType>
         <Block type="gold_block diamond_block redstone_block" description="found_goal" />
       </AgentQuitFromTouchingBlockType>
+        <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="20"/>
     </AgentHandlers>
   </AgentSection>
 </Mission>
