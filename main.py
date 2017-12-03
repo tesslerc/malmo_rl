@@ -3,10 +3,9 @@
 
 import argparse
 import logging
+import numpy as np
 import sys
 from typing import Tuple, Dict, List
-
-import numpy as np
 
 try:
     parser: argparse = (__import__("parameters.%s" % sys.argv[1], fromlist=["parameters"])).parser
@@ -42,7 +41,7 @@ def play_full_episode(_agent: Agent, _policy: Policy, _step: int, _params: argpa
         Tuple[Agent, int, bool, float, Dict[str, float]]:
     _eval_required = False
     _epoch_reward = 0
-    _reward, _terminal, _state, _terminal_due_to_timeout = _agent.perform_action(9)
+    _reward, _terminal, _state, _terminal_due_to_timeout = _agent.perform_action('new game')  # new game
     _log_dict = {}
     _start_step = _step
     while not _terminal:

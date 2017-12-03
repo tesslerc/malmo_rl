@@ -1,17 +1,16 @@
+import agents.malmo_dependencies.MalmoPython as MalmoPython
 import argparse
 import logging
+import numpy as np
 import os
 import random
 import re
 import subprocess
 import time
+from PIL import Image
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple
-
-import agents.malmo_dependencies.MalmoPython as MalmoPython
-import numpy as np
-from PIL import Image
 
 
 class Agent(ABC):
@@ -33,17 +32,16 @@ class Agent(ABC):
             self.params.malmo_port = 10000 + random.randint(0, 999)
             self._start_malmo()
 
-        # Mapping from policy action id's to actual game commands.
         # These are the commands supported by our simulator, different policies can support different actions as long as
         # they are sub-sets of this action set.
-        self.action_id_to_action_command = {
-            0: 'move 1',      # W
-            1: 'move -1',     # S
-            2: 'turn -1',     # A
-            3: 'turn 1',      # D
-            4: 'attack 1',    # Q
-            9: 'newgame'      # 9
-        }
+        self.supported_actions = [
+            'move 1',  # W
+            'move -1',  # S
+            'turn -1',  # A
+            'turn 1',  # D
+            'attack 1',  # Q
+            'new game'  # 9
+        ]
 
         # Add the default client - on the local machine:
         self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.params.malmo_port))
@@ -126,9 +124,9 @@ class Agent(ABC):
             for error in world_state.errors:
                 logging.error('Error: ' + error.text)
 
-    def perform_action(self, action_id: int) -> Tuple[float, bool, np.ndarray, bool]:
-        action_command = self.action_id_to_action_command[action_id]
-        if action_command is 'newgame':
+    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
+        assert (action_command in self.supported_actions)
+        if action_command == 'new game':
             self._restart_world()
             reward, terminal, state, world_state = self._get_new_state(True)
             reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal, state,
@@ -157,8 +155,7 @@ class Agent(ABC):
                                                                 self.params.image_height, not self.params.retain_rgb)
                     return current_r, False, preprocessed_state, world_state
                 elif not world_state.is_mission_running and not new_game:
-                    # TODO: add support for RGB.
-                    return current_r, True, np.zeros((self.params.image_width, self.params.image_height)), world_state
+                    return current_r, True, np.empty(0), world_state
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
         world_state = self.agent_host.getWorldState()

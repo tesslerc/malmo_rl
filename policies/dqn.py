@@ -1,13 +1,12 @@
 import argparse
 import copy
 import math
-from random import random, randrange
-from typing import Dict, Tuple
-
 import numpy as np
 import torch
+from random import random, randrange
 from torch import optim
 from torch.autograd import Variable
+from typing import Dict, Tuple
 
 from policies.models.DQN import DQN
 from policies.policy import Policy as AbstractPolicy
@@ -19,6 +18,14 @@ class Policy(AbstractPolicy):
         super(Policy, self).__init__(params)
         self.step: int = 0
         self.best_score: float = None
+
+        self.action_mapping: Dict[int, str] = {
+            0: 'move 1',  # W
+            1: 'move -1',  # S
+            2: 'turn -1',  # A
+            3: 'turn 1',  # D
+            4: 'attack 1',  # E
+        }
 
         self.cuda: bool = torch.cuda.is_available()
         self.model = DQN(self.params.num_actions)
@@ -50,7 +57,7 @@ class Policy(AbstractPolicy):
             self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
                                           dtype=np.float32)
 
-    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[int, Dict[str, float]]:
+    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[str, Dict[str, float]]:
         log_dict = {}
         if self.step > self.params.learn_start and is_train:
             log_dict = self.train()
@@ -76,14 +83,14 @@ class Policy(AbstractPolicy):
             # Random Action
             action = torch.IntTensor([randrange(self.params.num_actions)])
         else:
-            state = torch.from_numpy(self.current_state).unsqueeze(0)  # Unsqueeze adds the batch dimension.
+            torch_state = torch.from_numpy(self.current_state).unsqueeze(0)  # Unsqueeze adds the batch dimension.
             if self.cuda:
-                state = state.cuda()
-            action = self.model(Variable(state, volatile=True)).data.max(1)[1].cpu()
+                torch_state = torch_state.cuda()
+            action = self.model(Variable(torch_state, volatile=True)).data.max(1)[1].cpu()
 
         if is_train:
             self.previous_action, self.previous_state = action, state
-        return action[0], log_dict
+        return self.action_mapping[action[0]], log_dict
 
     def update_target_network(self) -> None:
         if self.step % self.params.target_update_interval == 0 or self.params.actively_follow_target:
