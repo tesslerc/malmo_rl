@@ -2,7 +2,7 @@ import argparse
 import copy
 import math
 from random import random, randrange
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import numpy as np
 import torch
@@ -20,13 +20,12 @@ class Policy(AbstractPolicy):
         self.step: int = 0
         self.best_score: float = None
 
-        self.action_mapping: Dict[int, str] = {
-            0: 'move 1',  # W
-            1: 'move -1',  # S
-            2: 'turn -1',  # A
-            3: 'turn 1',  # D
-            4: 'attack 1',  # E
-        }
+        self.action_mapping: List[str] = [
+            'move 1',  # W
+            'turn -1',  # A
+            'turn 1',  # D
+            'attack 1',  # E
+        ]
 
         self.cuda: bool = torch.cuda.is_available()
         self.model = DQN(self.params.num_actions)
