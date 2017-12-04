@@ -1,12 +1,13 @@
 import argparse
 import copy
 import math
+from random import random, randrange
+from typing import Dict, Tuple
+
 import numpy as np
 import torch
-from random import random, randrange
 from torch import optim
 from torch.autograd import Variable
-from typing import Dict, Tuple
 
 from policies.models.DQN import DQN
 from policies.policy import Policy as AbstractPolicy
@@ -47,7 +48,8 @@ class Policy(AbstractPolicy):
 
     def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
         # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
-        self.max_reward = max(self.max_reward, abs(reward)) if self.max_reward is not None else abs(reward)
+        if not terminal_due_to_timeout:
+            self.max_reward = max(self.max_reward, abs(reward)) if self.max_reward is not None else abs(reward)
         if self.params.normalize_reward:
             reward = reward * 1.0 / self.max_reward
         if self.previous_action is not None and is_train:
