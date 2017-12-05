@@ -1,16 +1,16 @@
-import agents.malmo_dependencies.MalmoPython as MalmoPython
 import argparse
 import logging
-import numpy as np
 import os
-import random
 import re
 import subprocess
 import time
-from PIL import Image
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple
+
+import agents.malmo_dependencies.MalmoPython as MalmoPython
+import numpy as np
+from PIL import Image
 
 
 class Agent(ABC):
@@ -19,17 +19,17 @@ class Agent(ABC):
     This class also defines the base behavior for communication with the environment.
     """
 
-    def __init__(self, params: argparse) -> None:
+    def __init__(self, params: argparse, port: int, start_malmo: bool) -> None:
         self.params = params
 
         # Malmo interface.
         self.minecraft = None
         self.MalmoPython = MalmoPython
         self.agent_host = self.MalmoPython.AgentHost()
+        self.malmo_port = port
 
         # If no port is given, start a Malmo instance with a random port number.
-        if self.params.malmo_port is None:
-            self.params.malmo_port = 10000 + random.randint(0, 999)
+        if start_malmo:
             self._start_malmo()
 
         # These are the commands supported by our simulator, different policies can support different actions as long as
@@ -44,15 +44,16 @@ class Agent(ABC):
         ]
 
         # Add the default client - on the local machine:
-        self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.params.malmo_port))
+        self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.malmo_port))
         self.client_pool = MalmoPython.ClientPool()
         self.client_pool.add(self.client)
 
         # Start the mission.
         self.tick_regex = re.compile('<MsPerTick>([0-9]*)</MsPerTick>', re.I)
         self.tick_time = 200  # Default value, in milliseconds.
-        self.experiment_id = None
-        self.max_mission_start_retries = 10
+        self.experiment_id = str(self.malmo_port)
+        self.mission_restart_print_frequency = 10
+        self.action_retry_threshold = 10
 
     def _start_malmo(self) -> None:
         # Minecraft directory is found via environment variable, this is required as a part of the Malmo installation
@@ -70,7 +71,7 @@ class Agent(ABC):
         working_directory = os.getcwd()
         # Loading malmo is required from within the Minecraft folder (otherwise we will encounter issues with gradle).
         os.chdir(str(minecraft_directory))
-        self.minecraft = subprocess.Popen([minecraft_path, '-port', str(self.params.malmo_port)],
+        self.minecraft = subprocess.Popen([minecraft_path, '-port', str(self.malmo_port)],
                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         logging.info('Starting Malmo:')
@@ -104,45 +105,58 @@ class Agent(ABC):
         mission = self.MalmoPython.MissionSpec(mission_xml, True)
         mission.forceWorldReset()
         mission_record = self.MalmoPython.MissionRecordSpec()
-        for retry in reversed(range(self.max_mission_start_retries)):
+
+        retry = 0
+        while not self.agent_host.getWorldState().is_mission_running:
             try:
+                logging.debug('Restarting the mission.')
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
                 break
             except RuntimeError as e:
-                if retry == 0:
-                    logging.critical('Error starting mission', e)
-                    logging.critical('Is the game running?')
-                    exit(1)
-                else:
-                    time.sleep(2)
+                retry += 1
+                if retry % self.mission_restart_print_frequency == 0:
+                    logging.critical('_load_mission_from_xml, Error starting mission', e)
+                time.sleep(2)
 
-    def _wait_for_mission_to_begin(self) -> None:
+    def _wait_for_mission_to_begin(self) -> bool:
         world_state = self.agent_host.getWorldState()
+        retry = 0
         while not world_state.has_mission_begun:
-            time.sleep(0.1)
+            time.sleep(1)
             world_state = self.agent_host.getWorldState()
             for error in world_state.errors:
-                logging.error('Error: ' + error.text)
+                logging.error('_wait_for_mission_to_begin, Error: ' + error.text)
+            retry += 1
+            if retry >= 20:
+                return False
+        return True
 
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
         assert (action_command in self.supported_actions)
-        if action_command == 'new game':
-            self._restart_world()
-            reward, terminal, state, world_state = self._get_new_state(True)
-            reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal, state,
-                                                                                                world_state)
-            return reward, terminal, state, terminal_due_to_timeout
-        else:
-            self.agent_host.sendCommand(action_command)
-            reward, terminal, state, world_state = self._get_new_state(False)
-            reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal, state,
-                                                                                                world_state)
-            return reward, terminal, state, terminal_due_to_timeout
-
-    def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState]:
-        current_r = 0
         while True:
-            time.sleep(self.tick_time / 1000.0)
+            if action_command == 'new game':
+                self._restart_world()
+                reward, terminal, state, world_state, action_succeeded = self._get_new_state(True)
+                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal,
+                                                                                                    state,
+                                                                                                    world_state)
+                if action_succeeded:
+                    return reward, terminal, state, terminal_due_to_timeout
+            else:
+                self.agent_host.sendCommand(action_command)
+                reward, terminal, state, world_state, action_succeeded = self._get_new_state(False)
+                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal,
+                                                                                                    state,
+                                                                                                    world_state)
+                if action_succeeded:
+                    return reward, terminal, state, terminal_due_to_timeout
+
+    def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
+        # Returns: reward, terminal, state, world_state, was action a success or not.
+        current_r = 0
+        number_of_attempts = 0
+        while True:
+            time.sleep(3 * self.tick_time / 1000.0)
             world_state, r = self._get_updated_world_state()
             current_r += r
 
@@ -153,15 +167,21 @@ class Agent(ABC):
                     state = Image.frombytes('RGB', (frame.width, frame.height), bytes(frame.pixels))
                     preprocessed_state = self._preprocess_state(state, self.params.image_width,
                                                                 self.params.image_height, not self.params.retain_rgb)
-                    return current_r, False, preprocessed_state, world_state
+                    return current_r, False, preprocessed_state, world_state, True
                 elif not world_state.is_mission_running and not new_game:
-                    return current_r, True, np.empty(0), world_state
+                    return current_r, True, np.empty(0), world_state, True
+
+            number_of_attempts += 1
+
+            if number_of_attempts >= self.action_retry_threshold:
+                logging.error('_get_new_state, Unable to retrieve state.')
+                return 0, False, np.empty(0), None, False
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
         world_state = self.agent_host.getWorldState()
         r = 0
         for error in world_state.errors:
-            logging.error('Error: ' + error.text)
+            logging.error('_get_updated_world_state, Error: ' + error.text)
         for reward in world_state.rewards:
             r += reward.getValue()
         return world_state, r

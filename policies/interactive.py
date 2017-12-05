@@ -1,6 +1,7 @@
 import argparse
+from typing import Dict, List
+
 import numpy as np
-from typing import Dict, Tuple
 
 from policies.policy import Policy as AbstractPolicy
 
@@ -23,7 +24,7 @@ class Policy(AbstractPolicy):
             113: 'quit',  # Q (quit)
         }
 
-    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[str, Dict[str, float]]:
+    def get_action(self, state: List[np.ndarray], is_train: bool) -> List[str]:
         del state
         del is_train
 
@@ -37,7 +38,10 @@ class Policy(AbstractPolicy):
             print('Ending simulation.')
             exit(0)
 
-        return action_command, {}
+        return [action_command]
 
     def parse_action(self, key_code: int) -> str:
         return self.action_mapping[key_code]
+
+    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
+        pass

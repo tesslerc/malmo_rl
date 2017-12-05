@@ -3,13 +3,19 @@
 
 import argparse
 import logging
-import numpy as np
 import sys
 from typing import Tuple, Dict, List
+
+import numpy as np
+
+from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
 
 try:
     parser: argparse = (__import__("parameters.%s" % sys.argv[1], fromlist=["parameters"])).parser
     params = parser.parse_args()
+    if params.malmo_ports is not None:
+        assert (len(params.malmo_ports) == params.number_of_agents)
+
     logging.basicConfig(format='%(levelname)s: %(message)s',
                         level=(logging.DEBUG if params.verbose_prints else logging.INFO))
 except ImportError:
@@ -37,21 +43,36 @@ def get_os() -> str:
         raise Exception('Unidentified operating system.')
 
 
-def play_full_episode(_agent: Agent, _policy: Policy, _step: int, _params: argparse, _is_train: bool) -> \
-        Tuple[Agent, int, bool, float, Dict[str, float]]:
+def play_full_episode(_agents: ParallelAgentsWrapper, _policy: Policy, _step: int, _params: argparse, _is_train: bool) \
+        -> Tuple[Agent, int, bool, float, Dict[str, float]]:
     _eval_required = False
     _epoch_reward = 0
-    _reward, _terminal, _state, _terminal_due_to_timeout = _agent.perform_action('new game')  # new game
+    _reward, _terminal, _state, _terminal_due_to_timeout = _agents.perform_actions(
+        ['new game'] * _params.number_of_agents)  # Restart all the agents.
+
     _log_dict = {}
     _start_step = _step
-    while not _terminal:
-        _action, _single_log_dict = _policy.get_action(_state, _is_train)
-        _reward, _terminal, _state, _terminal_due_to_timeout = _agent.perform_action(_action)
+    while not all(_terminal):  # Loop ends only when all agents have terminated.
+        _action = _policy.get_action(_state, _is_train)
+        _images = np.zeros((_params.number_of_agents, 3, 84, 84))
+        for idx in range(_params.number_of_agents):
+            _images[idx, 1, :, :] = _state[idx]
+            viz.image(_images[idx], win='state_agent_' + str(idx), opts=dict(title='Agent ' + str(idx) + '\'s state'))
+        _reward, _terminal, _state, _terminal_due_to_timeout = _agents.perform_actions(_action)
         _policy.update_observation(_reward, _terminal, _terminal_due_to_timeout, _is_train)
+
+        if _step > _params.learn_start and _is_train:
+            _single_log_dict = _policy.train()
+        else:
+            _single_log_dict = {}
+
         logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', _step, _reward, _terminal,
                       _terminal_due_to_timeout)
         _step += 1
-        _epoch_reward += _reward
+        for _r in _reward:
+            if _r is not None:
+                _epoch_reward += _r
+
         if _step % _params.eval_frequency == 0:
             _eval_required = True
         for _item in _single_log_dict:
@@ -61,7 +82,7 @@ def play_full_episode(_agent: Agent, _policy: Policy, _step: int, _params: argpa
                 _log_dict[_item] = _single_log_dict[_item]
     for _item in _log_dict:
         _single_log_dict[_item] = _single_log_dict[_item] * 1.0 / (_step - _start_step)
-    return _agent, _step, _eval_required, _epoch_reward, _log_dict
+    return _agents, _step, _eval_required, _epoch_reward, _log_dict
 
 
 def vis_plot(_viz, log_dict: Dict[str, List[Tuple[int, float]]]):
@@ -85,7 +106,7 @@ else:
     logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
     logging.info('then head over to http://localhost:8097')  # open this address on browser
 
-agent = Agent(params)
+agents = ParallelAgentsWrapper(Agent, params)
 policy = Policy(params)
 step = 0
 train_log_dict: Dict[str, List[Tuple[int, float]]] = {}
@@ -95,7 +116,7 @@ eval_log_dict: Dict[str, List[Tuple[int, float]]] = {'episodes': [], 'avg_reward
 
 while step < params.max_steps:
     prev_step = step
-    agent, step, eval_required, _, episode_log_dict = play_full_episode(agent, policy, step, params, True)
+    agents, step, eval_required, _, episode_log_dict = play_full_episode(agents, policy, step, params, True)
     for field in episode_log_dict:
         if field not in train_log_dict:
             train_log_dict[field] = []
@@ -103,8 +124,7 @@ while step < params.max_steps:
         train_log_dict[field].append((step, episode_log_dict[field]))
         all_values = np.array(train_log_dict[field])[:, 1]
         mva_length = min(params.graph_moving_average_length, len(all_values))
-        moving_average = np.sum(
-            all_values[-mva_length:]) * 1.0 / mva_length
+        moving_average = float(np.sum(all_values[-mva_length:]) * 1.0 / mva_length)
         train_log_dict[field + '_mva'].append((step, moving_average))
 
     if viz is not None:
@@ -118,19 +138,18 @@ while step < params.max_steps:
         max_eval_epoch_reward = None
         while eval_step < params.eval_steps:
             eval_epochs += 1
-            agent, eval_step, _, eval_epoch_reward, _ = play_full_episode(agent, policy, eval_step, params, False)
+            agents, eval_step, _, eval_epoch_reward, _ = play_full_episode(agents, policy, eval_step, params, False)
             total_eval_reward += eval_epoch_reward
-            max_eval_epoch_reward = eval_epoch_reward if max_eval_epoch_reward is None else max(max_eval_epoch_reward,
-                                                                                                eval_epoch_reward)
+            max_eval_epoch_reward = eval_epoch_reward if max_eval_epoch_reward is None else max(
+                max_eval_epoch_reward, eval_epoch_reward)
 
         eval_log_dict['episodes'].append((step, eval_epochs))
-        eval_log_dict['avg_reward'].append((step, total_eval_reward * 1.0 / eval_epochs))
-        eval_log_dict['max_episode_reward'].append((step, max_eval_epoch_reward))
+        eval_log_dict['avg_reward'].append((step, total_eval_reward * 1.0 / (eval_epochs * params.number_of_agents)))
+        eval_log_dict['max_episode_reward'].append((step, max_eval_epoch_reward * 1.0 / params.number_of_agents))
         for field in ['episodes', 'avg_reward', 'max_episode_reward']:
             all_values = np.array(eval_log_dict[field])[:, 1]
             mva_length = min(params.graph_moving_average_length, len(all_values))
-            moving_average = np.sum(
-                all_values[-mva_length:]) * 1.0 / mva_length
+            moving_average = float(np.sum(all_values[-mva_length:]) * 1.0 / mva_length)
             eval_log_dict[field + '_mva'].append((step, moving_average))
 
         logging.info('Eval ran for %s steps and a total of %s epochs.', eval_step, eval_epochs)

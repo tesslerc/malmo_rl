@@ -9,8 +9,8 @@ from agents.agent import Agent as BaseAgent
 
 
 class Agent(BaseAgent):
-    def __init__(self, params: argparse) -> None:
-        super(Agent, self).__init__(params)
+    def __init__(self, params: argparse, port: int, start_malmo: bool) -> None:
+        super(Agent, self).__init__(params, port, start_malmo)
         self.experiment_id: str = 'simple_room'
 
         self.reward_from_timeout_regex = re.compile(
@@ -32,8 +32,10 @@ class Agent(BaseAgent):
                 if reward_for_sending_command is not None:
                     self.reward_from_timeout += int(reward_for_sending_command.group(1))
 
-            self._load_mission_from_xml(mission_xml)
-            self._wait_for_mission_to_begin()
+            success = False
+            while not success:
+                self._load_mission_from_xml(mission_xml)
+                success = self._wait_for_mission_to_begin()
 
     def _manual_reward_and_terminal(self, reward: float, terminal: bool, state: np.ndarray, world_state: object) -> \
             Tuple[float, bool, np.ndarray, bool]:

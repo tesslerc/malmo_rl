@@ -5,7 +5,7 @@
   </About>
 
   <ModSettings>
-      <MsPerTick>400</MsPerTick>
+      <MsPerTick>50</MsPerTick>
     <PrioritiseOffscreenRendering>true</PrioritiseOffscreenRendering>
   </ModSettings>
 
@@ -63,7 +63,7 @@
       <ObservationFromFullStats />
       <DiscreteMovementCommands autoFall="true"/>
       <RewardForMissionEnd rewardForDeath="-10000">
-          <Reward description="found_goal" reward="0"/>
+          <Reward description="found_goal" reward="1"/>
           <Reward description="command_quota_reached" reward="-5"/>
       </RewardForMissionEnd>
       <RewardForTouchingBlockType>

@@ -1,8 +1,8 @@
 import argparse
 import copy
 import math
-from random import random, randrange
-from typing import Dict, Tuple, List
+from random import random
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 from policies.models.DQN import DQN
 from policies.policy import Policy as AbstractPolicy
-from utilities.replay_memory import ReplayMemory
+from utilities.parallel_replay_memory import ParallelReplayMemory
 
 
 class Policy(AbstractPolicy):
@@ -20,12 +20,7 @@ class Policy(AbstractPolicy):
         self.step: int = 0
         self.best_score: float = None
 
-        self.action_mapping: List[str] = [
-            'move 1',  # W
-            'turn -1',  # A
-            'turn 1',  # D
-            'attack 1',  # E
-        ]
+        self.action_mapping: List[str] = self.params.available_actions
 
         self.cuda: bool = torch.cuda.is_available()
         self.model = DQN(self.params.num_actions)
@@ -35,39 +30,42 @@ class Policy(AbstractPolicy):
         self.target_model: DQN = copy.deepcopy(self.model)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.params.lr)
         self.criterion = torch.nn.MSELoss()
-        self.replay_memory = ReplayMemory(self.params)
+        self.replay_memory = ParallelReplayMemory(self.params)
 
         self.max_reward: int = None
 
-        self.previous_action: int = None
-        self.previous_state: np.ndarray = None
+        self.previous_actions: List[int] = None
+        self.previous_states: np.ndarray = None
 
-        self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
-                                      dtype=np.float32)
+        self.current_state = np.zeros(
+            (self.params.number_of_agents, self.params.state_size, self.params.image_width, self.params.image_height),
+            dtype=np.float32)
 
-    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
+    def update_observation(self, reward: List[float], terminal: List[bool], terminal_due_to_timeout: List[bool],
+                           is_train: bool) -> None:
         # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
-        if not terminal_due_to_timeout:
-            self.max_reward = max(self.max_reward, abs(reward)) if self.max_reward is not None else abs(reward)
-        if self.params.normalize_reward:
-            reward = reward * 1.0 / self.max_reward
-        if self.previous_action is not None and is_train:
-            self.replay_memory.add_observation(self.previous_state, self.previous_action, reward,
-                                               1 if terminal else 0, terminal_due_to_timeout)
-        if terminal:
-            self.current_state = np.zeros((self.params.state_size, self.params.image_width, self.params.image_height),
-                                          dtype=np.float32)
+        for idx, r in enumerate(reward):
+            if not terminal_due_to_timeout[idx]:
+                self.max_reward = max(self.max_reward, abs(r)) if self.max_reward is not None else abs(r)
+            if self.params.normalize_reward and reward[idx] is not None:
+                reward[idx] = reward[idx] * 1.0 / self.max_reward
 
-    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[str, Dict[str, float]]:
-        log_dict = {}
-        if self.step > self.params.learn_start and is_train:
-            log_dict = self.train()
+        if self.previous_actions is not None and is_train:
+            self.replay_memory.add_observation(self.previous_states, self.previous_actions, reward,
+                                               [int(t) for t in terminal], terminal_due_to_timeout)
 
+        for idx, t in enumerate(terminal):
+            if t:
+                self.current_state[idx] = np.zeros(
+                    (self.params.state_size, self.params.image_width, self.params.image_height), dtype=np.float32)
+
+    def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
         # Normalize pixel values to [0,1] range.
-        state = np.array(state).reshape(self.params.image_width, self.params.image_height) / 255.0
+        states = np.array(states).reshape(self.params.number_of_agents, self.params.image_width,
+                                          self.params.image_height) / 255.0
 
-        self.current_state[:(self.params.state_size - 1)] = self.current_state[1:]
-        self.current_state[-1] = state
+        self.current_state[:, :(self.params.state_size - 1)] = self.current_state[:, 1:]
+        self.current_state[:, -1] = states
 
         if is_train:
             # Decrease epsilon value
@@ -82,16 +80,20 @@ class Policy(AbstractPolicy):
 
         if epsilon > random():
             # Random Action
-            action = torch.IntTensor([randrange(self.params.num_actions)])
+            actions = torch.from_numpy(np.random.randint(0, self.params.num_actions, self.params.number_of_agents))
         else:
-            torch_state = torch.from_numpy(self.current_state).unsqueeze(0)  # Unsqueeze adds the batch dimension.
+            torch_state = torch.from_numpy(self.current_state)
             if self.cuda:
                 torch_state = torch_state.cuda()
-            action = self.model(Variable(torch_state, volatile=True)).data.max(1)[1].cpu()
+            actions = self.model(Variable(torch_state, volatile=True)).data.max(1)[1].cpu()
 
         if is_train:
-            self.previous_action, self.previous_state = action, state
-        return self.action_mapping[action[0]], log_dict
+            self.previous_actions, self.previous_states = actions.numpy().tolist(), states
+
+        string_actions = []
+        for action in actions:
+            string_actions.append(self.action_mapping[action])
+        return string_actions
 
     def update_target_network(self) -> None:
         if self.step % self.params.target_update_interval == 0 or self.params.actively_follow_target:
@@ -113,9 +115,13 @@ class Policy(AbstractPolicy):
     def train(self) -> Dict[str, float]:
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state = self.replay_memory.sample()
         batch_state = Variable(torch.from_numpy(np.array(batch_state)).type(torch.FloatTensor))
-        batch_action = Variable(torch.stack(batch_action)).type(torch.LongTensor)
+        # batch_action = List[a_1, a_2, ..., a_batch_size].
+        # As a tensor it has a single dimension length of batch_size. Performing unsqueeze(-1) will add a dimension at
+        # the end, making the dimensions 32x1 -> [[a_1], [a_2], ..., [a_batch_size]].
+        batch_action = Variable(torch.from_numpy(np.array(batch_action)).unsqueeze(-1)).type(torch.LongTensor)
         batch_reward = Variable(torch.from_numpy(np.array(batch_reward)).type(torch.FloatTensor))
         batch_next_state = Variable(torch.from_numpy(np.array(batch_next_state)).type(torch.FloatTensor))
+        # not_done_mask contains 0 for terminal states and 1 for non-terminal states.
         not_done_mask = Variable(torch.from_numpy(1 - np.array(batch_terminal)).type(torch.FloatTensor))
         if self.cuda:
             batch_state = batch_state.cuda()

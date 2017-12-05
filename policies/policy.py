@@ -1,7 +1,8 @@
 import argparse
-import numpy as np
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple
+from typing import List
+
+import numpy as np
 
 
 class Policy(ABC):
@@ -13,7 +14,7 @@ class Policy(ABC):
         self.params: argparse = params
 
     @abstractmethod
-    def get_action(self, state: np.ndarray, is_train: bool) -> Tuple[str, Dict[str, float]]:
+    def get_action(self, state: List[np.ndarray], is_train: bool) -> List[str]:
         # An agent which wishes to learn from terminal_due_to_timeout, should set this value to False on all
         # occurrences. This way the replay_memory and other utilities will not treat those transitions as different.
         pass
