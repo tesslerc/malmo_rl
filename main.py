@@ -3,10 +3,9 @@
 
 import argparse
 import logging
+import numpy as np
 import sys
 from typing import Tuple, Dict, List
-
-import numpy as np
 
 from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
 
@@ -54,11 +53,22 @@ def play_full_episode(_agents: ParallelAgentsWrapper, _policy: Policy, _step: in
     _start_step = _step
     while not all(_terminal):  # Loop ends only when all agents have terminated.
         _action = _policy.get_action(_state, _is_train)
+
+        # Send screen of each agent to visdom.
         _images = np.zeros((_params.number_of_agents, 3, 84, 84))
         for idx in range(_params.number_of_agents):
             _images[idx, 1, :, :] = _state[idx]
             viz.image(_images[idx], win='state_agent_' + str(idx), opts=dict(title='Agent ' + str(idx) + '\'s state'))
         _reward, _terminal, _state, _terminal_due_to_timeout = _agents.perform_actions(_action)
+
+        # _reward is a list. Passing it to update_observation changes its values hence all references should be
+        # performed prior to calling update_observation.
+        for _r in _reward:
+            if _r is not None:
+                _epoch_reward += _r
+        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', _step, _reward, _terminal,
+                      _terminal_due_to_timeout)
+
         _policy.update_observation(_reward, _terminal, _terminal_due_to_timeout, _is_train)
 
         if _step > _params.learn_start and _is_train:
@@ -66,12 +76,7 @@ def play_full_episode(_agents: ParallelAgentsWrapper, _policy: Policy, _step: in
         else:
             _single_log_dict = {}
 
-        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', _step, _reward, _terminal,
-                      _terminal_due_to_timeout)
         _step += 1
-        for _r in _reward:
-            if _r is not None:
-                _epoch_reward += _r
 
         if _step % _params.eval_frequency == 0:
             _eval_required = True
@@ -80,6 +85,7 @@ def play_full_episode(_agents: ParallelAgentsWrapper, _policy: Policy, _step: in
                 _log_dict[_item] = _log_dict[_item] + _single_log_dict[_item]
             else:
                 _log_dict[_item] = _single_log_dict[_item]
+
     for _item in _log_dict:
         _single_log_dict[_item] = _single_log_dict[_item] * 1.0 / (_step - _start_step)
     return _agents, _step, _eval_required, _epoch_reward, _log_dict
