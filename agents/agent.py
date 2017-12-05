@@ -133,6 +133,7 @@ class Agent(ABC):
 
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
         assert (action_command in self.supported_actions)
+        retries = 0
         while True:
             if action_command == 'new game':
                 self._restart_world()
@@ -150,6 +151,10 @@ class Agent(ABC):
                                                                                                     world_state)
                 if action_succeeded:
                     return reward, terminal, state, terminal_due_to_timeout
+
+            retries += 1
+            if retries >= 10:
+                return 0, True, np.empty(0), True
 
     def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
         # Returns: reward, terminal, state, world_state, was action a success or not.
