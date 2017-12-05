@@ -13,6 +13,9 @@ import numpy as np
 from PIL import Image
 
 
+# TODO: Refactor error checking code to be more secure and robust!
+
+
 class Agent(ABC):
     """An agent abstract base class.
     Defines the methods which are required to be implemented by all agents deriving from this class.
@@ -165,6 +168,7 @@ class Agent(ABC):
             world_state, r = self._get_updated_world_state()
             current_r += r
 
+            # TODO: This is an issue... waiting for non-zero reward if a zero reward scenario is a legit option.
             if current_r != 0 or new_game:
                 if world_state.is_mission_running and len(world_state.observations) > 0 \
                         and not (world_state.observations[-1].text == "{}") and len(world_state.video_frames) > 0:

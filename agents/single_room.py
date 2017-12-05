@@ -17,20 +17,14 @@ class Agent(BaseAgent):
             '<Reward.*description.*=.*\"command_quota_reached\".*reward.*=.*\"(.*[0-9]*)\".*/>', re.I)
         self.reward_for_sending_command_regex = re.compile('<RewardForSendingCommand.*reward="(.*)"/>', re.I)
 
-        self.reward_from_timeout = None
+        self.reward_from_timeout = -6  # command_quota_reached + RewardForSendingCommand
+        self.reward_from_success = -0.5  # RewardForSendingCommand + found_goal
 
     def _restart_world(self) -> None:
         mission_file = './agents/domains/basic.xml'
         with open(mission_file, 'r') as f:
             logging.debug('Loading mission from %s.', mission_file)
             mission_xml = f.read()
-
-            reward_from_timeout = self.reward_from_timeout_regex.search(mission_xml)
-            if reward_from_timeout is not None:
-                self.reward_from_timeout = int(reward_from_timeout.group(1))
-                reward_for_sending_command = self.reward_for_sending_command_regex.search(mission_xml)
-                if reward_for_sending_command is not None:
-                    self.reward_from_timeout += int(reward_for_sending_command.group(1))
 
             success = False
             while not success:
@@ -45,7 +39,15 @@ class Agent(BaseAgent):
         # of the problem. By setting terminal_due_to_timeout, different agents can decide if to learn or not from these
         # states, thus ensuring a more robust solution and better chances of convergence.
         if self.reward_from_timeout is not None:
-            terminal_due_to_timeout = reward == self.reward_from_timeout
+            if reward == self.reward_from_timeout:
+                terminal_due_to_timeout = True
+                terminal = True
+            else:
+                terminal_due_to_timeout = False
         else:
             terminal_due_to_timeout = False
+
+        if reward == self.reward_from_success:
+            terminal = True
+
         return reward, terminal, state, terminal_due_to_timeout

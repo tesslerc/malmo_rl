@@ -63,7 +63,7 @@
       <ObservationFromFullStats />
       <DiscreteMovementCommands autoFall="true"/>
       <RewardForMissionEnd rewardForDeath="-10000">
-          <Reward description="found_goal" reward="1"/>
+          <Reward description="found_goal" reward="0.5"/>
           <Reward description="command_quota_reached" reward="-5"/>
       </RewardForMissionEnd>
       <RewardForTouchingBlockType>
