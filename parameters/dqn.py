@@ -14,8 +14,6 @@ parser.add_argument('--checkpoint_interval', type=int, default=5000)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--replay_memory_size', type=int, default=50000)
 parser.add_argument('--lr', type=float, default=0.0001)
-parser.add_argument('--num_actions', type=int, default=3,
-                    help='W,A,D (forward, turn left, turn right) as default keys.')
 parser.add_argument('--state_size', type=int, default=4, help='Number of observations that create a "state".')
 parser.add_argument('--gamma', type=float, default=0.99)
 parser.add_argument('--gradient_clipping', type=float, default=1.0,
