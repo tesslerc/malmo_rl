@@ -14,6 +14,10 @@ from policies.policy import Policy as AbstractPolicy
 from utilities.parallel_replay_memory import ParallelReplayMemory
 
 
+# TODO: Distributional DQN.
+# TODO: A2C.
+
+
 class Policy(AbstractPolicy):
     def __init__(self, params: argparse) -> None:
         super(Policy, self).__init__(params)
@@ -23,7 +27,7 @@ class Policy(AbstractPolicy):
         self.action_mapping: List[str] = self.params.available_actions
 
         self.cuda: bool = torch.cuda.is_available()
-        self.model = DQN(self.params.num_actions)
+        self.model = DQN(len(self.action_mapping))
         if self.cuda:
             self.model.cuda()
 
@@ -80,7 +84,7 @@ class Policy(AbstractPolicy):
 
         if epsilon > random():
             # Random Action
-            actions = torch.from_numpy(np.random.randint(0, self.params.num_actions, self.params.number_of_agents))
+            actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
         else:
             torch_state = torch.from_numpy(self.current_state)
             if self.cuda:
@@ -140,10 +144,11 @@ class Policy(AbstractPolicy):
         # Loss is: 0.5*(current_Q_values - target_Q_values)^2.
         # TD error is: current_Q_values - target_Q_values.
         if self.params.double_dqn:
-            next_max_Q = self.model(batch_next_state).detach().max(1)[0]
+            next_best_actions = self.model(batch_next_state).detach().max(1)[1].unsqueeze(-1)
+            next_max_Q = self.model(batch_next_state).detach().gather(1, next_best_actions).squeeze(-1)
         else:
             next_max_Q = self.target_model(batch_next_state).detach().max(1)[0]
-        next_Q = not_done_mask * next_max_Q
+        next_Q = next_max_Q.mul(not_done_mask)
         target_Q = batch_reward + (self.params.gamma * next_Q)
 
         # Calculate the loss and propagate the gradients.
