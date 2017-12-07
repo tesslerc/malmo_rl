@@ -1,12 +1,12 @@
-# command line example:
-# python main.py <policy> <domain> --param...
-
 import argparse
 import logging
-import numpy as np
 import sys
+import time
 from typing import Tuple, Dict, List
 
+import numpy as np
+
+from utilities import helpers
 from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
 
 try:
@@ -30,79 +30,7 @@ try:
 except ImportError:
     raise FileNotFoundError('Agent file ' + sys.argv[2] + ' not found!')
 
-
-def get_os() -> str:
-    if sys.platform in ['linux', 'linux2']:
-        return 'linux'
-    elif sys.platform == 'darwin':  # osx
-        raise NotImplementedError('OSX interactive agent is not supported yet.')
-    elif sys.platform in ['win32', 'cygwin']:
-        return 'win'
-    else:
-        raise Exception('Unidentified operating system.')
-
-
-def play_full_episode(_agents: ParallelAgentsWrapper, _policy: Policy, _step: int, _params: argparse, _is_train: bool) \
-        -> Tuple[Agent, int, bool, float, Dict[str, float]]:
-    _eval_required = False
-    _epoch_reward = 0
-    _reward, _terminal, _state, _terminal_due_to_timeout = _agents.perform_actions(
-        ['new game'] * _params.number_of_agents)  # Restart all the agents.
-
-    _log_dict = {}
-    _start_step = _step
-    while not all(_terminal):  # Loop ends only when all agents have terminated.
-        _action = _policy.get_action(_state, _is_train)
-
-        # Send screen of each agent to visdom.
-        _images = np.zeros((_params.number_of_agents, 3, 84, 84))
-        for idx in range(_params.number_of_agents):
-            _images[idx, 1, :, :] = _state[idx]
-            viz.image(_images[idx], win='state_agent_' + str(idx), opts=dict(title='Agent ' + str(idx) + '\'s state'))
-        _reward, _terminal, _state, _terminal_due_to_timeout = _agents.perform_actions(_action)
-
-        # _reward is a list. Passing it to update_observation changes its values hence all references should be
-        # performed prior to calling update_observation.
-        for _r in _reward:
-            if _r is not None:
-                _epoch_reward += _r
-        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', _step, _reward, _terminal,
-                      _terminal_due_to_timeout)
-
-        _policy.update_observation(_reward, _terminal, _terminal_due_to_timeout, _is_train)
-
-        if _step > _params.learn_start and _is_train:
-            _single_log_dict = _policy.train()
-        else:
-            _single_log_dict = {}
-
-        _step += 1
-
-        if _step % _params.eval_frequency == 0:
-            _eval_required = True
-        for _item in _single_log_dict:
-            if _item in _log_dict:
-                _log_dict[_item] = _log_dict[_item] + _single_log_dict[_item]
-            else:
-                _log_dict[_item] = _single_log_dict[_item]
-
-    for _item in _log_dict:
-        _single_log_dict[_item] = _single_log_dict[_item] * 1.0 / (_step - _start_step)
-    return _agents, _step, _eval_required, _epoch_reward, _log_dict
-
-
-def vis_plot(_viz, log_dict: Dict[str, List[Tuple[int, float]]]):
-    for _field in log_dict:
-        if '_mva' not in _field:
-            plot_data = np.array(log_dict[_field])
-            _viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=_field, opts=dict(title=_field, legend=[_field]))
-            if (_field + '_mva') in log_dict:
-                plot_data = np.array(log_dict[_field + '_mva'])
-                viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=_field, name=_field + '_mva',
-                         opts=dict(showlegend=True, legend=[_field + '_mva']), update='append')
-
-
-params.platform = get_os()
+params.platform = helpers.get_os()
 if params.no_visualization:
     viz = None
 else:
@@ -120,21 +48,24 @@ eval_log_dict: Dict[str, List[Tuple[int, float]]] = {'episodes': [], 'avg_reward
                                                      'episodes_mva': [], 'avg_reward_mva': [],
                                                      'max_episode_reward_mva': []}
 
+start_time = time.clock()
 while step < params.max_steps:
     prev_step = step
-    agents, step, eval_required, _, episode_log_dict = play_full_episode(agents, policy, step, params, True)
+    agents, step, eval_required, _, episode_log_dict = helpers.play_full_episode(agents, policy, step, params, True,
+                                                                                 viz)
     for field in episode_log_dict:
         if field not in train_log_dict:
             train_log_dict[field] = []
             train_log_dict[field + '_mva'] = []
         train_log_dict[field].append((step, episode_log_dict[field]))
         all_values = np.array(train_log_dict[field])[:, 1]
+        # Length of moving average, relevant for the initial first data points.
         mva_length = min(params.graph_moving_average_length, len(all_values))
         moving_average = float(np.sum(all_values[-mva_length:]) * 1.0 / mva_length)
         train_log_dict[field + '_mva'].append((step, moving_average))
 
     if viz is not None:
-        vis_plot(viz, train_log_dict)
+        helpers.vis_plot(viz, train_log_dict)
 
     if eval_required:
         logging.info('Eval started after %s training steps.', step)
@@ -144,7 +75,8 @@ while step < params.max_steps:
         max_eval_epoch_reward = None
         while eval_step < params.eval_steps:
             eval_epochs += 1
-            agents, eval_step, _, eval_epoch_reward, _ = play_full_episode(agents, policy, eval_step, params, False)
+            agents, eval_step, _, eval_epoch_reward, _ = helpers.play_full_episode(agents, policy, eval_step, params,
+                                                                                   False, viz)
             total_eval_reward += eval_epoch_reward
             max_eval_epoch_reward = eval_epoch_reward if max_eval_epoch_reward is None else max(
                 max_eval_epoch_reward, eval_epoch_reward)
@@ -161,6 +93,9 @@ while step < params.max_steps:
         logging.info('Eval ran for %s steps and a total of %s epochs.', eval_step, eval_epochs)
         logging.info('Average reward during eval (per epoch) is: %s.', total_eval_reward * 1.0 / eval_epochs)
         logging.info('Maximal reward during eval (accumulated over an epoch) is: %s.', max_eval_epoch_reward)
+        logging.info('Train speed: %s steps/second. Test speed: %s steps/second',
+                     (step - prev_step) * 1.0 / (time.clock() - start_time),
+                     eval_step * 1.0 / (time.clock() - start_time))
 
         if viz is not None:
-            vis_plot(viz, eval_log_dict)
+            helpers.vis_plot(viz, eval_log_dict)
