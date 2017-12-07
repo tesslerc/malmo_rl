@@ -1,6 +1,7 @@
 import argparse
-import numpy as np
 from collections import namedtuple
+
+import numpy as np
 
 # Definition of observation:
 #   state:    s_t
@@ -10,6 +11,9 @@ from collections import namedtuple
 #   terminal: t_(t+1) (whether or not the next state is a terminal state)
 slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, terminal_due_to_timeout')
 observation = namedtuple('observation', 'state, action, reward, terminal, next_state')
+
+
+# TODO: Prioritized experience replay.
 
 
 class ReplayMemory(object):
@@ -35,12 +39,12 @@ class ReplayMemory(object):
         mini_batch = []
         # Starting from index 3 (to enable building of a full state), and up to 'self.elements_in_memory - 1' to make
         # sure the next state exists.
-        training_samples = np.random.choice(3, self.elements_in_memory - 1, self.batch_size)
+        training_samples = np.random.choice(self.elements_in_memory - 4, self.batch_size) + 3
         for index in range(self.batch_size):
             while self.memory[training_samples[index]].terminal_due_to_timeout:
                 # We do not learn from termination states due to timeout. Timeout is an artificial addition to make sure
                 # episodes end and the train/test procedure continues.
-                training_samples[index] = np.random.choice(3, self.elements_in_memory - 1)
+                training_samples[index] = np.random.choice(self.elements_in_memory - 4, 1) + 3
 
             obs = self.memory[training_samples[index]]
             state = self._build_state(training_samples[index])
