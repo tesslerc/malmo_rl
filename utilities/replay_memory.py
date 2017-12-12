@@ -1,7 +1,9 @@
 import argparse
-from collections import namedtuple
-
 import numpy as np
+from collections import namedtuple
+from typing import List
+
+from utilities.segment_tree import SumSegmentTree
 
 # Definition of observation:
 #   state:    s_t
@@ -10,10 +12,7 @@ import numpy as np
 #                       s_(t+1))
 #   terminal: t_(t+1) (whether or not the next state is a terminal state)
 slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, terminal_due_to_timeout')
-observation = namedtuple('observation', 'state, action, reward, terminal, next_state')
-
-
-# TODO: Prioritized experience replay.
+observation = namedtuple('observation', 'state, action, reward, terminal, next_state, index_in_memory')
 
 
 class ReplayMemory(object):
@@ -22,29 +21,59 @@ class ReplayMemory(object):
         self.memory_size = params.replay_memory_size
         self.batch_size = params.batch_size
         self.state_size = params.state_size
-        self.memory = []
+    self.memory: List[slim_observation] = [None] * self.memory_size
         self.elements_in_memory = 0
+
+    # Prioritized ER parameters.
+    self.epsilon = 0.01
+    self.alpha = 0.6
+    self.insert_index = 0
+    it_capacity = 1
+    while it_capacity < self.memory_size:
+        it_capacity *= 2
+    self._it_sum = SumSegmentTree(it_capacity)
+    self._max_priority = 1.0
 
     def add_observation(self, state: object, action: int, reward: float, terminal: int,
                         terminal_due_to_timeout: bool) -> None:
-        self.memory.append(slim_observation(state=state, action=action, reward=reward, terminal=terminal,
+self.memory.insert(self.insert_index,
+                   slim_observation(state=state, action=action, reward=reward, terminal=terminal,
                                             terminal_due_to_timeout=terminal_due_to_timeout))
-        if self.elements_in_memory >= self.memory_size:
-            self.memory.pop(0)
-        else:
-            self.elements_in_memory += 1
+
+# Update values in Sum and Min trees (Prioritized ER). To ensure all observations are sampled at least once,
+# they are initially set to maximal priority.
+priority = (self._max_priority + self.epsilon) ** self.alpha
+if self.insert_index < self.params.state_size:
+    # We want to make sure that the minimal sampled index will be state_size to ensure we can build a full
+    # state.
+    priority = 0.0
+self._it_sum[self.insert_index] = priority
+
+self.elements_in_memory = min(self.elements_in_memory + 1, self.memory_size)
+self.insert_index = (self.insert_index + 1) % self.memory_size
+
+
+def _sample_proportional(self, batch_size):
+    res = []
+    for _ in range(batch_size):
+        mass = np.random.random() * self._it_sum.sum(0, self.elements_in_memory - 1)
+        idx = self._it_sum.find_prefixsum_idx(mass)
+        res.append(idx)
+    return res
 
     def sample(self):
-        # Returns: states, actions, rewards, termination values, next states
+        # Returns: Tuple[states, actions, rewards, termination values, next states, indices]
         mini_batch = []
-        # Starting from index 3 (to enable building of a full state), and up to 'self.elements_in_memory - 1' to make
-        # sure the next state exists.
-        training_samples = np.random.choice(self.elements_in_memory - 4, self.batch_size) + 3
+
+        training_samples = self._sample_proportional(self.batch_size)
         for index in range(self.batch_size):
-            while self.memory[training_samples[index]].terminal_due_to_timeout:
+            while self.memory[training_samples[index]].terminal_due_to_timeout or \
+                            training_samples[index] < self.params.state_size:
                 # We do not learn from termination states due to timeout. Timeout is an artificial addition to make sure
                 # episodes end and the train/test procedure continues.
-                training_samples[index] = np.random.choice(self.elements_in_memory - 4, 1) + 3
+                # Also make sure all samples are in the range [self.paramsstate_size, self.elements_in_memory - 1] to
+                # ensure that we can always build the first state and the next state.
+                training_samples[index] = self._sample_proportional(1)[0]
 
             obs = self.memory[training_samples[index]]
             state = self._build_state(training_samples[index])
@@ -55,8 +84,8 @@ class ReplayMemory(object):
                 # this 'next_state' object.
                 next_state = state
             mini_batch.append(observation(state=state, action=obs.action, reward=obs.reward, terminal=obs.terminal,
-                                          next_state=next_state))
-        # Returns tuple: batch_state, batch_action, batch_reward, batch_terminal, batch_next_state
+                                          next_state=next_state, index_in_memory=training_samples[index]))
+
         return zip(*mini_batch)
 
     def _build_state(self, final_index: int) -> np.ndarray:
@@ -72,5 +101,17 @@ class ReplayMemory(object):
 
         return np.array(state)
 
+
+def update_priorities(self, indices: List[int], priorities
+
+: List[float]) -> None:
+assert len(indices) == len(priorities)
+for idx, priority in zip(indices, priorities):
+    assert priority > 0
+    assert 0 <= idx < self.elements_in_memory
+    self._it_sum[self.insert_index] = (priority + self.epsilon) ** self.alpha
+
+    self._max_priority = max(self._max_priority, priority)
+
     def size(self) -> int:
-        return len(self.memory)
+return self.elements_in_memory
