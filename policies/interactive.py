@@ -1,19 +1,24 @@
 import argparse
+import numpy as np
 from typing import Dict, List
 
-import numpy as np
-
 from policies.policy import Policy as AbstractPolicy
-
-try:
-    from getch import getch
-except:
-    from msvcrt import getch
 
 
 class Policy(AbstractPolicy):
     def __init__(self, params: argparse.Namespace) -> None:
         super(Policy, self).__init__(params)
+
+    self.getch = None
+    if self.params.platform == 'linux':
+        from getch import getch
+    elif self.params.platform == 'win':
+        from msvcrt import getch
+    else:
+        print('Unsupported OS: ' + self.params.platform)
+        exit(0)
+
+    self.getch = getch
 
         self.action_mapping: Dict[int, str] = {
             119: 'move 1',  # W
@@ -28,10 +33,15 @@ class Policy(AbstractPolicy):
         del state
         del is_train
 
-        key_code = ord(getch())
-        while key_code not in self.action_mapping:
+while True:
+    try:
+        key_code = ord(self.getch())
+        if key_code not in self.action_mapping:
             print('Invalid key pressed, try again...')
-            key_code = ord(getch())
+        else:
+            break
+    except OverflowError:
+        print('Bad key pressed.')
 
         action_command = self.parse_action(key_code)
         if action_command == 'quit':
