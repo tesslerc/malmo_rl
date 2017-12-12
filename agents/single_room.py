@@ -1,9 +1,11 @@
 import argparse
+import json
 import logging
-import re
-from typing import Tuple
-
 import numpy as np
+import random
+import re
+import time
+from typing import Tuple
 
 from agents.agent import Agent as BaseAgent
 
@@ -17,37 +19,69 @@ class Agent(BaseAgent):
             '<Reward.*description.*=.*\"command_quota_reached\".*reward.*=.*\"(.*[0-9]*)\".*/>', re.I)
         self.reward_for_sending_command_regex = re.compile('<RewardForSendingCommand.*reward="(.*)"/>', re.I)
 
-        self.reward_from_timeout = -6  # command_quota_reached + RewardForSendingCommand
-        self.reward_from_success = -0.5  # RewardForSendingCommand + found_goal
+    self.reward_from_success = 0
+    self.number_of_steps = 0
+    self.maximal_number_of_steps = 100
+    self.touching_block = False
 
     def _restart_world(self) -> None:
-        mission_file = './agents/domains/basic.xml'
-        with open(mission_file, 'r') as f:
-            logging.debug('Loading mission from %s.', mission_file)
-            mission_xml = f.read()
+if not self.game_running:
+    mission_file = './agents/domains/basic.xml'
+    with open(mission_file, 'r') as f:
+        logging.debug('Loading mission from %s.', mission_file)
+        mission_xml = f.read()
 
-            success = False
-            while not success:
-                self._load_mission_from_xml(mission_xml)
-                success = self._wait_for_mission_to_begin()
+        success = False
+        while not success:
+            self._load_mission_from_xml(mission_xml)
+            success = self._wait_for_mission_to_begin()
 
-    def _manual_reward_and_terminal(self, reward: float, terminal: bool, state: np.ndarray, world_state: object) -> \
-            Tuple[float, bool, np.ndarray, bool]:
-        del world_state  # Not used in the base implementation.
+        self.game_running = True
+
+x = y = z = 0
+while True:
+    # Ensure that we don't start right on the block.
+    x = random.randint(0, 6) + 0.5
+    y = 55.0
+    z = random.randint(0, 6) + 0.5
+    if x != 2.5 or z != 5.5:
+        break
+self.agent_host.sendCommand('chat /tp Cristina ' + str(x) + ' ' + str(y) + ' ' + str(z) + ' -180.0 0.0')
+
+time.sleep(2)
+# Generate random int between 0 and 3
+turn_direction = random.randint(0, 3)
+self.agent_host.sendCommand('turn ' + str(turn_direction))
+
+self.number_of_steps = 0
+
+
+def _manual_reward_and_terminal(self, action_command: str, reward
+
+: float, terminal: bool, state: np.ndarray,
+                                world_state: object) -> Tuple[
+    float, bool, np.ndarray, bool]:  # returns: reward, terminal, state, terminal due to timeout.
+msg = world_state.observations[-1].text
+observations = json.loads(msg)
+grid = observations.get(u'floor3x3', 0)
+
+self.number_of_steps += 1
+
+if (grid[10] == u'gold_block' or
+            grid[14] == u'gold_block' or
+            grid[16] == u'gold_block' or
+            grid[12] == u'gold_block'):
+    if self.touching_block and action_command == 'move 1':
+        return self.reward_from_success, True, state, False
+    self.touching_block = True
+else:
+    self.touching_block = False
+
 
         # Since basic agents don't have the notion of time, hence death due to timeout breaks the markovian assumption
         # of the problem. By setting terminal_due_to_timeout, different agents can decide if to learn or not from these
         # states, thus ensuring a more robust solution and better chances of convergence.
-        if self.reward_from_timeout is not None:
-            if reward == self.reward_from_timeout:
-                terminal_due_to_timeout = True
-                terminal = True
-            else:
-                terminal_due_to_timeout = False
-        else:
-            terminal_due_to_timeout = False
+if self.number_of_steps % self.maximal_number_of_steps == 0:
+    return reward, True, state, True
 
-        if reward == self.reward_from_success:
-            terminal = True
-
-        return reward, terminal, state, terminal_due_to_timeout
+return reward, False, state, False

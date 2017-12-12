@@ -1,16 +1,15 @@
+import agents.malmo_dependencies.MalmoPython as MalmoPython
 import argparse
 import logging
+import numpy as np
 import os
 import re
 import subprocess
 import time
+from PIL import Image
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple
-
-import agents.malmo_dependencies.MalmoPython as MalmoPython
-import numpy as np
-from PIL import Image
 
 
 # TODO: Refactor error checking code to be more secure and robust!
@@ -57,6 +56,8 @@ class Agent(ABC):
         self.experiment_id = str(self.malmo_port)
         self.mission_restart_print_frequency = 10
         self.action_retry_threshold = 10
+
+    self.game_running = False
 
     def _start_malmo(self) -> None:
         # Minecraft directory is found via environment variable, this is required as a part of the Malmo installation
@@ -141,17 +142,17 @@ class Agent(ABC):
             if action_command == 'new game':
                 self._restart_world()
                 reward, terminal, state, world_state, action_succeeded = self._get_new_state(True)
-                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal,
-                                                                                                    state,
-                                                                                                    world_state)
+                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(action_command,
+                                                                                                    reward, terminal,
+                                                                                                    state, world_state)
                 if action_succeeded:
                     return reward, terminal, state, terminal_due_to_timeout
             else:
                 self.agent_host.sendCommand(action_command)
                 reward, terminal, state, world_state, action_succeeded = self._get_new_state(False)
-                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(reward, terminal,
-                                                                                                    state,
-                                                                                                    world_state)
+                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(action_command,
+                                                                                                    reward, terminal,
+                                                                                                    state, world_state)
                 if action_succeeded:
                     return reward, terminal, state, terminal_due_to_timeout
 
@@ -187,17 +188,27 @@ class Agent(ABC):
                 return 0, False, np.empty(0), None, False
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
+world_state = self.agent_host.peekWorldState()
+while world_state.is_mission_running and all(e.text == '{}' for e in world_state.observations):
+    world_state = self.agent_host.peekWorldState()
+# wait for a frame to arrive after that
+num_frames_seen = world_state.number_of_video_frames_since_last_state
+while world_state.is_mission_running and world_state.number_of_video_frames_since_last_state == num_frames_seen:
+    world_state = self.agent_host.peekWorldState()
         world_state = self.agent_host.getWorldState()
-        r = 0
+
         for error in world_state.errors:
             logging.error('_get_updated_world_state, Error: ' + error.text)
-        for reward in world_state.rewards:
-            r += reward.getValue()
-        return world_state, r
+current_r = sum(r.getValue() for r in world_state.rewards)
 
-    def _manual_reward_and_terminal(self, reward: float, terminal: bool, state: np.ndarray, world_state: object) -> \
-            Tuple[float, bool, np.ndarray, bool]:
-        del world_state  # Not used in the base implementation.
+return world_state, current_r
+
+
+def _manual_reward_and_terminal(self, action_command: str, reward
+
+: float, terminal: bool, state: np.ndarray,
+                                world_state: object) -> Tuple[float, bool, np.ndarray, bool]:
+del world_state, action_command  # Not used in the base implementation.
         terminal_due_to_timeout = False  # Default behavior is allow training on all states.
         return reward, terminal, state, terminal_due_to_timeout
 
