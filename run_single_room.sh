@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-pythom main.py dqn single_room --double_dqn --normalize_reward
+python main.py dqn single_room --double_dqn --normalize_reward
