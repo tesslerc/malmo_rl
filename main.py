@@ -1,10 +1,9 @@
 import argparse
 import logging
+import numpy as np
 import sys
 import time
 from typing import Tuple, Dict, List
-
-import numpy as np
 
 from utilities import helpers
 from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
@@ -68,6 +67,7 @@ while step < params.max_steps:
         helpers.vis_plot(viz, train_log_dict)
 
     if eval_required:
+        eval_clock = time.clock()
         logging.info('Eval started after %s training steps.', step)
         eval_step = 0
         total_eval_reward = 0
@@ -94,8 +94,8 @@ while step < params.max_steps:
         logging.info('Average reward during eval (per epoch) is: %s.', total_eval_reward * 1.0 / eval_epochs)
         logging.info('Maximal reward during eval (accumulated over an epoch) is: %s.', max_eval_epoch_reward)
         logging.info('Train speed: %s steps/second. Test speed: %s steps/second',
-                     (step - prev_step) * 1.0 / (time.clock() - start_time),
-                     eval_step * 1.0 / (time.clock() - start_time))
+                     step * 1.0 / (time.clock() - start_time),
+                     eval_step * 1.0 / (time.clock() - eval_clock))
 
         if viz is not None:
             helpers.vis_plot(viz, eval_log_dict)
