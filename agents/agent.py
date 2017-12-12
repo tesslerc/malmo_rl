@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import random
 import re
 import subprocess
 import time
@@ -22,13 +23,13 @@ class Agent(ABC):
     This class also defines the base behavior for communication with the environment.
     """
 
-    def __init__(self, params: argparse, port: int, start_malmo: bool) -> None:
+    def __init__(self, params: argparse, port: int, start_malmo: bool, agent_index: int) -> None:
         self.params = params
-
+        self.agent_index = agent_index
         # Malmo interface.
         self.minecraft = None
         self.MalmoPython = MalmoPython
-        self.agent_host = self.MalmoPython.AgentHost()
+        self.agent_host = None
         self.malmo_port = port
 
         # If no port is given, start a Malmo instance with a random port number.
@@ -46,19 +47,26 @@ class Agent(ABC):
             'new game'  # 9
         ]
 
-        # Add the default client - on the local machine:
-        self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.malmo_port))
-        self.client_pool = MalmoPython.ClientPool()
-        self.client_pool.add(self.client)
+        self.client = None
+        self.client_pool = None
 
         # Start the mission.
         self.tick_regex = re.compile('<MsPerTick>([0-9]*)</MsPerTick>', re.I)
         self.tick_time = 200  # Default value, in milliseconds.
-        self.experiment_id = str(self.malmo_port)
+        self.experiment_id = None
         self.mission_restart_print_frequency = 10
         self.action_retry_threshold = 10
 
         self.game_running = False
+
+    def _initialize_malmo_communication(self):
+        logging.info('Agent[' + str(self.agent_index) + ']: Initializing Malmo communication.')
+        # Add the default client - on the local machine:
+        self.agent_host = self.MalmoPython.AgentHost()
+        self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.malmo_port))
+        self.client_pool = MalmoPython.ClientPool()
+        self.client_pool.add(self.client)
+        self.experiment_id = str(random.randint(0, 10000))
 
     def _start_malmo(self) -> None:
         # Minecraft directory is found via environment variable, this is required as a part of the Malmo installation
@@ -79,7 +87,7 @@ class Agent(ABC):
         self.minecraft = subprocess.Popen([minecraft_path, '-port', str(self.malmo_port)],
                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        logging.info('Starting Malmo:')
+        logging.info('Agent[' + str(self.agent_index) + ']: Starting Malmo:')
         current_line = ''
         # Emit Malmo console logs to console up to the point where it is fully loaded.
         for c in iter(lambda: self.minecraft.stdout.read(1), ''):
@@ -92,7 +100,7 @@ class Agent(ABC):
             else:
                 current_line += c.decode('utf-8')
 
-        logging.info('Malmo loaded!')
+        logging.info('Agent[' + str(self.agent_index) + ']: Malmo loaded!')
 
         os.chdir(working_directory)
 
@@ -102,26 +110,27 @@ class Agent(ABC):
         pass
 
     def _load_mission_from_xml(self, mission_xml: str) -> None:
+        logging.info('Agent[' + str(self.agent_index) + ']: Loading mission from XML.')
         # Given a string variable (containing the mission XML), will reload the mission itself.
         tick_time = self.tick_regex.search(mission_xml)
         if tick_time is not None:
             self.tick_time = int(tick_time.group(1))
 
         mission = self.MalmoPython.MissionSpec(mission_xml, True)
-        mission.forceWorldReset()
+        # mission.forceWorldReset()
         mission_record = self.MalmoPython.MissionRecordSpec()
 
         retry = 0
-        while not self.agent_host.getWorldState().is_mission_running:
+        while not self.agent_host.getWorldState().has_mission_begun:
             try:
-                logging.debug('Restarting the mission.')
+                logging.debug('Agent[' + str(self.agent_index) + ']: Restarting the mission.')
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
-                break
             except RuntimeError as e:
                 retry += 1
                 if retry % self.mission_restart_print_frequency == 0:
-                    logging.critical('_load_mission_from_xml, Error starting mission', e)
-                time.sleep(2)
+                    logging.critical(
+                        'Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission', e)
+            time.sleep(2)
 
     def _wait_for_mission_to_begin(self) -> bool:
         world_state = self.agent_host.getWorldState()
@@ -130,7 +139,7 @@ class Agent(ABC):
             time.sleep(1)
             world_state = self.agent_host.getWorldState()
             for error in world_state.errors:
-                logging.error('_wait_for_mission_to_begin, Error: ' + error.text)
+                logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error: ' + error.text)
             retry += 1
             if retry >= 20:
                 return False
@@ -143,22 +152,17 @@ class Agent(ABC):
             if action_command == 'new game':
                 self._restart_world()
                 reward, terminal, state, world_state, action_succeeded = self._get_new_state(True)
-                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(action_command,
-                                                                                                    reward, terminal,
-                                                                                                    state, world_state)
                 if action_succeeded:
-                    return reward, terminal, state, terminal_due_to_timeout
+                    return self._manual_reward_and_terminal(action_command, reward, terminal, state, world_state)
             else:
                 self.agent_host.sendCommand(action_command)
                 reward, terminal, state, world_state, action_succeeded = self._get_new_state(False)
-                reward, terminal, state, terminal_due_to_timeout = self._manual_reward_and_terminal(action_command,
-                                                                                                    reward, terminal,
-                                                                                                    state, world_state)
                 if action_succeeded:
-                    return reward, terminal, state, terminal_due_to_timeout
+                    return self._manual_reward_and_terminal(action_command, reward, terminal, state, world_state)
 
             retries += 1
             if retries >= 10:
+                self.game_running = False
                 return 0, True, np.empty(0), True
 
     def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
@@ -171,7 +175,7 @@ class Agent(ABC):
             current_r += r
 
             # TODO: This is an issue... waiting for non-zero reward if a zero reward scenario is a legit option.
-            if current_r != 0 or new_game:
+            if (current_r != 0 or new_game) and world_state is not None:
                 if world_state.is_mission_running and len(world_state.observations) > 0 \
                         and not (world_state.observations[-1].text == "{}") and len(world_state.video_frames) > 0:
                     frame = world_state.video_frames[-1]
@@ -180,26 +184,38 @@ class Agent(ABC):
                                                                 self.params.image_height, not self.params.retain_rgb)
                     return current_r, False, preprocessed_state, world_state, True
                 elif not world_state.is_mission_running and not new_game:
+                    self.game_running = False
                     return current_r, True, np.empty(0), world_state, True
 
             number_of_attempts += 1
 
             if number_of_attempts >= self.action_retry_threshold:
-                logging.error('_get_new_state, Unable to retrieve state.')
+                logging.error('Agent[' + str(self.agent_index) + ']: _get_new_state, Unable to retrieve state.')
+                self.game_running = False
                 return 0, False, np.empty(0), None, False
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
         world_state = self.agent_host.peekWorldState()
+        number_of_attempts = 0
         while world_state.is_mission_running and all(e.text == '{}' for e in world_state.observations):
+            time.sleep(self.tick_time / 1000.0)
             world_state = self.agent_host.peekWorldState()
+            number_of_attempts += 1
+            if number_of_attempts >= 10:
+                return None, 0
         # wait for a frame to arrive after that
         num_frames_seen = world_state.number_of_video_frames_since_last_state
+        number_of_attempts = 0
         while world_state.is_mission_running and world_state.number_of_video_frames_since_last_state == num_frames_seen:
+            time.sleep(self.tick_time / 1000.0)
             world_state = self.agent_host.peekWorldState()
+            number_of_attempts += 1
+            if number_of_attempts >= 10:
+                return None, 0
 
         world_state = self.agent_host.getWorldState()
         for error in world_state.errors:
-            logging.error('_get_updated_world_state, Error: ' + error.text)
+            logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error: ' + error.text)
         current_r = sum(r.getValue() for r in world_state.rewards)
         return world_state, current_r
 

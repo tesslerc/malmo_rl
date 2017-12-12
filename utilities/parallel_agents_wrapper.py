@@ -18,8 +18,8 @@ class ParallelAgentsWrapper(object):
             malmo_exists = False
 
         self.agents = []
-        for port in self.ports:
-            self.agents.append(agent_class(self.params, port, not malmo_exists))
+        for agent_index, port in enumerate(self.ports):
+            self.agents.append(agent_class(self.params, port, not malmo_exists, agent_index))
 
         self.agent_running = [True] * self.params.number_of_agents
 

@@ -12,8 +12,8 @@ from agents.agent import Agent as BaseAgent
 
 
 class Agent(BaseAgent):
-    def __init__(self, params: argparse, port: int, start_malmo: bool) -> None:
-        super(Agent, self).__init__(params, port, start_malmo)
+    def __init__(self, params: argparse, port: int, start_malmo: bool, agent_index: int) -> None:
+        super(Agent, self).__init__(params, port, start_malmo, agent_index)
         self.experiment_id: str = 'simple_room'
 
         self.reward_from_timeout_regex = re.compile(
@@ -27,9 +27,11 @@ class Agent(BaseAgent):
 
     def _restart_world(self) -> None:
         if not self.game_running:
+            self._initialize_malmo_communication()
+
             mission_file = './agents/domains/basic.xml'
             with open(mission_file, 'r') as f:
-                logging.debug('Loading mission from %s.', mission_file)
+                logging.debug('Agent[' + str(self.agent_index) + ']: Loading mission from %s.', mission_file)
                 mission_xml = f.read()
 
                 success = False
@@ -39,7 +41,6 @@ class Agent(BaseAgent):
 
                 self.game_running = True
 
-        x = y = z = 0
         while True:
             # Ensure that we don't start right on the block.
             x = random.randint(0, 6) + 0.5
@@ -70,6 +71,7 @@ class Agent(BaseAgent):
                     grid[16] == u'gold_block' or
                     grid[12] == u'gold_block'):
             if self.touching_block and action_command == 'move 1':
+                self.touching_block = False
                 return self.reward_from_success, True, state, False
             self.touching_block = True
         else:
