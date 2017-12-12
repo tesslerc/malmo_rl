@@ -1,12 +1,13 @@
 import argparse
 import copy
 import math
+from random import random
+from typing import Dict, List
+
 import numpy as np
 import torch
-from random import random
 from torch import optim
 from torch.autograd import Variable
-from typing import Dict, List
 
 from policies.models.dqn import DQN
 from policies.policy import Policy as AbstractPolicy
@@ -25,11 +26,11 @@ class Policy(AbstractPolicy):
         self.action_mapping: List[str] = self.params.available_actions
 
         self.cuda: bool = torch.cuda.is_available()
-    self.model: torch.nn.Module = self.create_model()
+        self.model: torch.nn.Module = self.create_model()
         if self.cuda:
             self.model.cuda()
 
-    self.target_model: torch.nn.Module = copy.deepcopy(self.model)
+        self.target_model: torch.nn.Module = copy.deepcopy(self.model)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.params.lr)
         self.criterion = torch.nn.MSELoss()
         self.replay_memory = ParallelReplayMemory(self.params)
@@ -43,35 +44,29 @@ class Policy(AbstractPolicy):
             (self.params.number_of_agents, self.params.state_size, self.params.image_width, self.params.image_height),
             dtype=np.float32)
 
+    def create_model(self) -> torch.nn.Module:
+        return DQN(len(self.action_mapping))
 
-def create_model(self) ->
-
-
-torch.nn.Module:
-return DQN(len(self.action_mapping))
-
-
-def update_observation(self, rewards: List[float], terminations
-
-: List[bool], terminations_due_to_timeout: List[bool],
+    def update_observation(self, rewards: List[float], terminations: List[bool],
+                           terminations_due_to_timeout: List[bool],
                            is_train: bool) -> None:
         # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
-for idx, reward in enumerate(rewards):
-    if not terminations_due_to_timeout[idx]:
-        # Max reward is set to Rmax / (1 - gamma). This way Q(s, a) will be squashed to [-1, 1].
-        self.max_reward = max(self.max_reward,
-                              abs(reward) / (1.0 - self.params.gamma)) if self.max_reward is not None \
-            else abs(reward) / (1.0 - self.params.gamma)
-    if self.params.normalize_reward and rewards[idx] is not None:
-        rewards[idx] = rewards[idx] * 1.0 / self.max_reward
+        for idx, reward in enumerate(rewards):
+            if not terminations_due_to_timeout[idx]:
+                # Max reward is set to Rmax / (1 - gamma). This way Q(s, a) will be squashed to [-1, 1].
+                self.max_reward = max(self.max_reward,
+                                      abs(reward) / (1.0 - self.params.gamma)) if self.max_reward is not None \
+                    else abs(reward) / (1.0 - self.params.gamma)
+            if self.params.normalize_reward and rewards[idx] is not None:
+                rewards[idx] = rewards[idx] * 1.0 / self.max_reward
 
         if self.previous_actions is not None and is_train:
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
                                                [int(terminal) for terminal in terminations],
                                                terminations_due_to_timeout)
 
-for idx, terminal in enumerate(terminations):
-    if terminal:
+        for idx, terminal in enumerate(terminations):
+            if terminal:
                 self.current_state[idx] = np.zeros(
                     (self.params.state_size, self.params.image_width, self.params.image_height), dtype=np.float32)
 
@@ -94,20 +89,17 @@ for idx, terminal in enumerate(terminations):
         else:
             epsilon = self.params.epsilon_test
 
-actions = self.action_epsilon_greedy(epsilon)
+        actions = self.action_epsilon_greedy(epsilon)
 
-if is_train:
-    self.previous_actions, self.previous_states = actions.numpy().tolist(), states
+        if is_train:
+            self.previous_actions, self.previous_states = actions.numpy().tolist(), states
 
-string_actions = []
-for action in actions:
-    string_actions.append(self.action_mapping[action])
-return string_actions
+        string_actions = []
+        for action in actions:
+            string_actions.append(self.action_mapping[action])
+        return string_actions
 
-
-def action_epsilon_greedy(self, epsilon: float
-
-) -> torch.LongTensor:
+    def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:
         if epsilon > random():
             # Random Action
             actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
@@ -116,7 +108,7 @@ def action_epsilon_greedy(self, epsilon: float
             if self.cuda:
                 torch_state = torch_state.cuda()
             actions = self.model(Variable(torch_state, volatile=True)).data.max(1)[1].cpu()
-return actions
+        return actions
 
     def update_target_network(self) -> None:
         if self.step % self.params.target_update_interval == 0 or self.params.actively_follow_target:
@@ -136,7 +128,7 @@ return actions
                 self.model = copy.deepcopy(self.target_model)
 
     def train(self) -> Dict[str, float]:
-batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
+        batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
         batch_state = Variable(torch.from_numpy(np.array(batch_state)).type(torch.FloatTensor))
         # batch_action = List[a_1, a_2, ..., a_batch_size].
         # As a tensor it has a single dimension length of batch_size. Performing unsqueeze(-1) will add a dimension at
@@ -156,21 +148,20 @@ batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indic
         # Zero out the gradient buffer.
         self.optimizer.zero_grad()
 
-loss, td_error = self.get_loss(batch_state, batch_action, batch_reward, not_done_mask, batch_next_state)
+        loss, td_error = self.get_loss(batch_state, batch_action, batch_reward, not_done_mask, batch_next_state)
 
-# Update priorities in ER.
-if self.params.prioritized_experience_replay:
-    self.replay_memory.update_priorities(indices, np.abs(td_error))
-loss.backward()
+        # Update priorities in ER.
+        if self.params.prioritized_experience_replay:
+            self.replay_memory.update_priorities(indices, np.abs(td_error))
+        loss.backward()
 
-if self.params.gradient_clipping > 0:
-    torch.nn.utils.clip_grad_norm(self.target_model.parameters(), self.params.gradient_clipping)
-self.optimizer.step()
+        if self.params.gradient_clipping > 0:
+            torch.nn.utils.clip_grad_norm(self.target_model.parameters(), self.params.gradient_clipping)
+        self.optimizer.step()
 
-return {'loss': loss.data[0], 'td_error': td_error.mean()}
+        return {'loss': loss.data[0], 'td_error': td_error.mean()}
 
-
-def get_loss(self, batch_state, batch_action, batch_reward, not_done_mask, batch_next_state):
+    def get_loss(self, batch_state, batch_action, batch_reward, not_done_mask, batch_next_state):
         # Calculate expected Q values.
         current_q = self.target_model(batch_state).gather(1, batch_action)
 
