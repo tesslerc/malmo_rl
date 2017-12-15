@@ -1,9 +1,10 @@
 import argparse
 import logging
-import numpy as np
 import sys
 import time
 from typing import Tuple, Dict, List
+
+import numpy as np
 
 from utilities import helpers
 from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
@@ -14,8 +15,9 @@ try:
     if params.malmo_ports is not None:
         assert (len(params.malmo_ports) == params.number_of_agents)
 
-    logging.basicConfig(format='%(levelname)s: %(message)s',
-                        level=(logging.DEBUG if params.verbose_prints else logging.INFO))
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+                        level=(logging.DEBUG if params.verbose_prints else logging.INFO),
+                        datefmt='%Y-%m-%d %H:%M:%S')
 except ImportError:
     raise FileNotFoundError('Parameter file for policy ' + sys.argv[1] + ' not found!')
 
