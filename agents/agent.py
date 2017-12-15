@@ -120,34 +120,38 @@ class Agent(ABC):
         # mission.forceWorldReset()
         mission_record = self.MalmoPython.MissionRecordSpec()
 
-        retry = 0
         while not self.agent_host.getWorldState().has_mission_begun:
             try:
+                number_of_attempts = 0
                 logging.debug('Agent[' + str(self.agent_index) + ']: Restarting the mission.')
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
+                while not self.agent_host.getWorldState().has_mission_begun:
+                    number_of_attempts += 1
+                    time.sleep(1)
+                    if number_of_attempts >= 20:
+                        break
             except RuntimeError as e:
-                retry += 1
-                if retry % self.mission_restart_print_frequency == 0:
-                    logging.critical(
-                        'Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission', e)
-            time.sleep(2)
+                logging.critical(
+                    'Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission', e)
 
     def _wait_for_mission_to_begin(self) -> bool:
+        logging.info('Agent[' + str(self.agent_index) + ']: Waiting for mission to begin.')
         world_state = self.agent_host.getWorldState()
-        retry = 0
+        number_of_attempts = 0
         while not world_state.has_mission_begun:
-            time.sleep(1)
+            time.sleep(5)
             world_state = self.agent_host.getWorldState()
             for error in world_state.errors:
                 logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error: ' + error.text)
-            retry += 1
-            if retry >= 20:
+            number_of_attempts += 1
+            if number_of_attempts >= 100:
                 return False
         return True
 
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
         assert (action_command in self.supported_actions)
-        retries = 0
+        number_of_attempts = 0
+        logging.info('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
         while True:
             if action_command == 'new game':
                 self._restart_world()
@@ -160,12 +164,15 @@ class Agent(ABC):
                 if action_succeeded:
                     return self._manual_reward_and_terminal(action_command, reward, terminal, state, world_state)
 
-            retries += 1
-            if retries >= 10:
+            number_of_attempts += 1
+            time.sleep(3 * self.tick_time / 1000.0)
+            if number_of_attempts >= 100:
+                logging.error('Agent[' + str(self.agent_index) + ']: Failed to send action.')
                 self.game_running = False
                 return 0, True, np.empty(0), True
 
     def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
+        logging.info('Agent[' + str(self.agent_index) + ']: _get_new_state.')
         # Returns: reward, terminal, state, world_state, was action a success or not.
         current_r = 0
         number_of_attempts = 0
@@ -175,7 +182,7 @@ class Agent(ABC):
             current_r += r
 
             # TODO: This is an issue... waiting for non-zero reward if a zero reward scenario is a legit option.
-            if (current_r != 0 or new_game) and world_state is not None:
+            if world_state is not None:
                 if world_state.is_mission_running and len(world_state.observations) > 0 \
                         and not (world_state.observations[-1].text == "{}") and len(world_state.video_frames) > 0:
                     frame = world_state.video_frames[-1]
@@ -188,36 +195,44 @@ class Agent(ABC):
                     return current_r, True, np.empty(0), world_state, True
 
             number_of_attempts += 1
-
-            if number_of_attempts >= self.action_retry_threshold:
+            if number_of_attempts >= 100:
                 logging.error('Agent[' + str(self.agent_index) + ']: _get_new_state, Unable to retrieve state.')
                 self.game_running = False
                 return 0, False, np.empty(0), None, False
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
-        world_state = self.agent_host.peekWorldState()
-        number_of_attempts = 0
-        while world_state.is_mission_running and all(e.text == '{}' for e in world_state.observations):
-            time.sleep(self.tick_time / 1000.0)
+        logging.info('Agent[' + str(self.agent_index) + ']: _get_updated_world_state.')
+        try:
             world_state = self.agent_host.peekWorldState()
-            number_of_attempts += 1
-            if number_of_attempts >= 10:
-                return None, 0
-        # wait for a frame to arrive after that
-        num_frames_seen = world_state.number_of_video_frames_since_last_state
-        number_of_attempts = 0
-        while world_state.is_mission_running and world_state.number_of_video_frames_since_last_state == num_frames_seen:
-            time.sleep(self.tick_time / 1000.0)
-            world_state = self.agent_host.peekWorldState()
-            number_of_attempts += 1
-            if number_of_attempts >= 10:
-                return None, 0
+            number_of_attempts = 0
+            while world_state.is_mission_running and all(e.text == '{}' for e in world_state.observations):
+                time.sleep(self.tick_time / 1000.0)
+                world_state = self.agent_host.peekWorldState()
+                number_of_attempts += 1
+                if number_of_attempts >= 100:
+                    logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state error in first loop.')
+                    return None, 0
+            # wait for a frame to arrive after that
+            num_frames_seen = world_state.number_of_video_frames_since_last_state
+            number_of_attempts = 0
+            while world_state.is_mission_running and world_state.number_of_video_frames_since_last_state == num_frames_seen:
+                time.sleep(self.tick_time / 1000.0)
+                world_state = self.agent_host.peekWorldState()
+                number_of_attempts += 1
+                if number_of_attempts >= 100:
+                    logging.error(
+                        'Agent[' + str(self.agent_index) + ']: _get_updated_world_state error in second loop.')
+                    return None, 0
 
-        world_state = self.agent_host.getWorldState()
-        for error in world_state.errors:
-            logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error: ' + error.text)
-        current_r = sum(r.getValue() for r in world_state.rewards)
-        return world_state, current_r
+            world_state = self.agent_host.getWorldState()
+            for error in world_state.errors:
+                logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error: ' + error.text)
+            current_r = sum(r.getValue() for r in world_state.rewards)
+            return world_state, current_r
+        except Exception as e:
+            logging.error(
+                'Agent[' + str(self.agent_index) + ']: _get_updated_world_state exception met: ' + str(e.format_exc()))
+            return None, 0
 
     def _manual_reward_and_terminal(self, action_command: str, reward: float, terminal: bool, state: np.ndarray,
                                     world_state: object) -> Tuple[float, bool, np.ndarray, bool]:
