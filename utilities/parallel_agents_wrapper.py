@@ -1,7 +1,5 @@
 import argparse
-import queue
 import random
-import threading
 from typing import List
 
 import numpy as np
@@ -23,9 +21,10 @@ class ParallelAgentsWrapper(object):
 
         self.agent_running = [True] * self.params.number_of_agents
 
-    def perform_actions(self, actions: List[str]):
-        Queue = queue.Queue()
+        self.previous_state = [np.zeros(
+            (self.params.image_width, self.params.image_height))] * self.params.number_of_agents
 
+    def perform_actions(self, actions: List[str]):
         rewards = [None] * self.params.number_of_agents
         terminations = [None] * self.params.number_of_agents
         states = [None] * self.params.number_of_agents
@@ -34,29 +33,31 @@ class ParallelAgentsWrapper(object):
         if actions[0] == 'new game':
             self.agent_running = [True] * self.params.number_of_agents
 
-        threads = []
+        results = []
         for idx, agent in enumerate(self.agents):
-            threads.append(threading.Thread(target=self.agent_perform_action, args=(agent, actions[idx], idx, Queue)))
-            threads[idx].start()
+            results.append(self.agent_perform_action(agent, actions[idx], idx))
 
-        for thread in threads:
-            idx, reward, terminal, state, terminal_due_to_timeout = Queue.get()
-            thread.join()
+        for result in results:
+            idx, reward, terminal, state, terminal_due_to_timeout = result
             rewards[idx] = reward
             terminations[idx] = terminal
+            # Cosmetics, used to keep the termination screen valid while other agents are not done yet.
+            if terminal:
+                state = self.previous_state[idx]
+            else:
+                self.previous_state[idx] = state
             states[idx] = state
             terminations_due_to_timeout[idx] = terminal_due_to_timeout
 
         return rewards, terminations, states, terminations_due_to_timeout
 
-    def agent_perform_action(self, agent, action, idx, Queue):
+    def agent_perform_action(self, agent, action, idx):
         if self.agent_running[idx]:
             reward, terminal, state, terminal_due_to_timeout = agent.perform_action(action)
             if terminal:
                 self.agent_running[idx] = False
-                state = np.zeros((self.params.image_width, self.params.image_height))
         else:
             reward, terminal, state, terminal_due_to_timeout = (
-                None, True, np.zeros((self.params.image_width, self.params.image_height)), True)
+                None, True, np.empty(0), True)
 
-        Queue.put((idx, reward, terminal, state, terminal_due_to_timeout))
+        return tuple((idx, reward, terminal, state, terminal_due_to_timeout))
