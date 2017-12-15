@@ -51,8 +51,8 @@ class Agent(ABC):
         self.client_pool = None
 
         # Start the mission.
-        self.tick_regex = re.compile('<MsPerTick>([0-9]*)</MsPerTick>', re.I)
-        self.tick_time = 200  # Default value, in milliseconds.
+        self.tick_regex = re.compile('<MsPerTick>[0-9]*</MsPerTick>', re.I)
+        self.tick_time = self.params.ms_per_tick  # Default value, in milliseconds.
         self.experiment_id = None
         self.mission_restart_print_frequency = 10
         self.action_retry_threshold = 10
@@ -112,9 +112,8 @@ class Agent(ABC):
     def _load_mission_from_xml(self, mission_xml: str) -> None:
         logging.info('Agent[' + str(self.agent_index) + ']: Loading mission from XML.')
         # Given a string variable (containing the mission XML), will reload the mission itself.
-        tick_time = self.tick_regex.search(mission_xml)
-        if tick_time is not None:
-            self.tick_time = int(tick_time.group(1))
+
+        mission_xml = self.tick_regex.sub('<MsPerTick>' + str(self.params.ms_per_tick) + '</MsPerTick>', mission_xml)
 
         mission = self.MalmoPython.MissionSpec(mission_xml, True)
         # mission.forceWorldReset()

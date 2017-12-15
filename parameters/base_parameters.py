@@ -9,7 +9,7 @@ parser.add_argument('--number_of_agents', type=int, default=1,
                     help='Number of agents to run in parallel, all use the same policy. This is used to increase the number of observation samples obtained over time.')
 parser.add_argument('--max_steps', type=int, default=2000000)
 parser.add_argument('--eval_frequency', type=int, default=1000)
-parser.add_argument('--eval_steps', type=int, default=150)
+parser.add_argument('--eval_steps', type=int, default=100)
 parser.add_argument('--image_width', type=int, default=84)
 parser.add_argument('--image_height', type=int, default=84)
 # TODO: Add support in models for RGB format.
@@ -22,3 +22,5 @@ parser.add_argument('--verbose_prints', default=False, action='store_true',
                     help='Enable verbose debug prints for more informative details.')
 parser.add_argument('--available_actions', default=['move 1', 'turn -1', 'turn 1'], nargs='+',
                     help='Space separated list of available actions. E.g. "\'move 1\' \'turn -1\'..."')
+parser.add_argument('--ms_per_tick', default=100,
+                    help='Delay between ticks, this is a setting for the Malmo simulator.')
