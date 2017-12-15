@@ -35,7 +35,7 @@ class Policy(AbstractPolicy):
         self.criterion = torch.nn.MSELoss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
-        self.max_reward: int = None
+        self.max_reward: int = 1.0
 
         self.previous_actions: List[int] = None
         self.previous_states: np.ndarray = None
