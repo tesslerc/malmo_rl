@@ -40,6 +40,7 @@ else:
     viz = Visdom()
     logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
     logging.info('then head over to http://localhost:8097')  # open this address on browser
+params.viz = viz
 
 agents = ParallelAgentsWrapper(Agent, params)
 policy = Policy(params)
@@ -52,8 +53,7 @@ eval_log_dict: Dict[str, List[Tuple[int, float]]] = {'episodes': [], 'avg_reward
 start_time = time.clock()
 while step < params.max_steps:
     prev_step = step
-    agents, step, eval_required, _, episode_log_dict = helpers.play_full_episode(agents, policy, step, params, True,
-                                                                                 viz)
+    agents, step, eval_required, _, episode_log_dict = helpers.play_full_episode(agents, policy, step, params, True)
     for field in episode_log_dict:
         if field not in train_log_dict:
             train_log_dict[field] = []
@@ -65,8 +65,8 @@ while step < params.max_steps:
         moving_average = float(np.sum(all_values[-mva_length:]) * 1.0 / mva_length)
         train_log_dict[field + '_mva'].append((step, moving_average))
 
-    if viz is not None:
-        helpers.vis_plot(viz, train_log_dict)
+    if params.viz is not None:
+        helpers.vis_plot(params.viz, train_log_dict)
 
     if eval_required:
         eval_clock = time.clock()
@@ -78,7 +78,7 @@ while step < params.max_steps:
         while eval_step < params.eval_steps:
             eval_epochs += 1
             agents, eval_step, _, eval_epoch_reward, _ = helpers.play_full_episode(agents, policy, eval_step, params,
-                                                                                   False, viz)
+                                                                                   False)
             total_eval_reward += eval_epoch_reward
             max_eval_epoch_reward = eval_epoch_reward if max_eval_epoch_reward is None else max(
                 max_eval_epoch_reward, eval_epoch_reward)
@@ -99,5 +99,5 @@ while step < params.max_steps:
                      step * 1.0 / (time.clock() - start_time),
                      eval_step * 1.0 / (time.clock() - eval_clock))
 
-        if viz is not None:
-            helpers.vis_plot(viz, eval_log_dict)
+        if params.viz is not None:
+            helpers.vis_plot(params.viz, eval_log_dict)
