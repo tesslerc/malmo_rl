@@ -31,10 +31,11 @@ class Policy(AbstractPolicy):
             self.model.cuda()
 
         self.target_model: torch.nn.Module = copy.deepcopy(self.model)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.params.lr)
+        self.optimizer = optim.RMSprop(self.model.parameters(), lr=self.params.lr)
         self.criterion = torch.nn.MSELoss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
+        self.min_reward: int = 0.0
         self.max_reward: int = 1.0
 
         self.previous_actions: List[int] = None
@@ -50,15 +51,23 @@ class Policy(AbstractPolicy):
     def update_observation(self, rewards: List[float], terminations: List[bool],
                            terminations_due_to_timeout: List[bool],
                            is_train: bool) -> None:
-        # Normalizing reward forces all rewards to the range of [0, 1]. This tends to help convergence.
+        # Normalizing reward forces all Q values to the range of [-1, 1]. This tends to help convergence.
         for idx, reward in enumerate(rewards):
             if not terminations_due_to_timeout[idx]:
                 # Max reward is set to Rmax / (1 - gamma). This way Q(s, a) will be squashed to [-1, 1].
-                self.max_reward = max(self.max_reward,
-                                      abs(reward) / (1.0 - self.params.gamma)) if self.max_reward is not None \
-                    else abs(reward) / (1.0 - self.params.gamma)
+                self.max_reward = max(self.max_reward, reward) if reward is not None else self.max_reward
+                self.min_reward = min(self.min_reward, reward) if reward is not None else self.min_reward
+
             if self.params.normalize_reward and rewards[idx] is not None:
-                rewards[idx] = rewards[idx] * 1.0 / self.max_reward
+                normalized_reward = rewards[idx] - self.min_reward  # Now in range [0, abs(max - min)]
+                normalized_reward = normalized_reward / abs(self.max_reward - self.min_reward)  # Now in range [0, 1]
+                normalized_reward = (normalized_reward - 0.5) * 2  # Now in range [-1, 1]
+                if self.params.min_max_q_values > 0:
+                    # Now in range [-min_max_q, +min_max_q]
+                    normalized_reward = normalized_reward * self.params.min_max_q_values
+
+                # Finally, squash Q values to the range of [-min_max, +min_max]
+                rewards[idx] = normalized_reward * (1 - self.params.gamma)
 
         if self.previous_actions is not None and is_train:
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
@@ -169,8 +178,8 @@ class Policy(AbstractPolicy):
         # Loss is: 0.5*(current_q_values - target_q_values)^2.
         # TD error is: current_q_values - target_q_values.
         if self.params.double_dqn:
-            next_best_actions = self.model(batch_next_state).detach().max(1)[1].unsqueeze(-1)
-            next_max_q = self.target_model(batch_next_state).detach().gather(1, next_best_actions).squeeze(-1)
+            next_best_actions = self.model(batch_next_state).detach().max(1)[1].unsqueeze(1)
+            next_max_q = self.target_model(batch_next_state).detach().gather(1, next_best_actions).squeeze(1)
         else:
             next_max_q = self.target_model(batch_next_state).detach().max(1)[0]
         next_q = next_max_q.mul(not_done_mask)
