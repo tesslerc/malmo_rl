@@ -110,7 +110,7 @@ class Agent(ABC):
         pass
 
     def _load_mission_from_xml(self, mission_xml: str) -> None:
-        logging.info('Agent[' + str(self.agent_index) + ']: Loading mission from XML.')
+        logging.debug('Agent[' + str(self.agent_index) + ']: Loading mission from XML.')
         # Given a string variable (containing the mission XML), will reload the mission itself.
 
         mission_xml = self.tick_regex.sub('<MsPerTick>' + str(self.params.ms_per_tick) + '</MsPerTick>', mission_xml)
@@ -134,7 +134,7 @@ class Agent(ABC):
                     'Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission', e)
 
     def _wait_for_mission_to_begin(self) -> bool:
-        logging.info('Agent[' + str(self.agent_index) + ']: Waiting for mission to begin.')
+        logging.debug('Agent[' + str(self.agent_index) + ']: Waiting for mission to begin.')
         world_state = self.agent_host.getWorldState()
         number_of_attempts = 0
         while not world_state.has_mission_begun:
@@ -150,7 +150,7 @@ class Agent(ABC):
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
         assert (action_command in self.supported_actions)
         number_of_attempts = 0
-        logging.info('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
+        logging.debug('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
         while True:
             if action_command == 'new game':
                 self._restart_world()
@@ -171,7 +171,7 @@ class Agent(ABC):
                 return 0, True, np.empty(0), True
 
     def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
-        logging.info('Agent[' + str(self.agent_index) + ']: _get_new_state.')
+        logging.debug('Agent[' + str(self.agent_index) + ']: _get_new_state.')
         # Returns: reward, terminal, state, world_state, was action a success or not.
         current_r = 0
         number_of_attempts = 0
@@ -200,7 +200,7 @@ class Agent(ABC):
                 return 0, False, np.empty(0), None, False
 
     def _get_updated_world_state(self) -> Tuple[MalmoPython.WorldState, float]:
-        logging.info('Agent[' + str(self.agent_index) + ']: _get_updated_world_state.')
+        logging.debug('Agent[' + str(self.agent_index) + ']: _get_updated_world_state.')
         try:
             world_state = self.agent_host.peekWorldState()
             number_of_attempts = 0
