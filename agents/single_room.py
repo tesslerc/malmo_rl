@@ -22,7 +22,7 @@ class Agent(BaseAgent):
 
         self.reward_from_success = 0
         self.number_of_steps = 0
-        self.maximal_number_of_steps = 100
+        self.maximal_number_of_steps = 20
         self.touching_block = False
 
     def _restart_world(self) -> None:
@@ -65,6 +65,9 @@ class Agent(BaseAgent):
         grid = observations.get(u'floor3x3', 0)
 
         self.number_of_steps += 1
+
+        if action_command == 'new game':
+            self.touching_block = False
 
         if (grid[10] == u'gold_block' or
                     grid[14] == u'gold_block' or
