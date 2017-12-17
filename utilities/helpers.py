@@ -1,7 +1,7 @@
 import argparse
 import logging
 import sys
-from typing import Tuple, Dict, List, Any
+from typing import Tuple, Dict, List
 
 import numpy as np
 
@@ -20,8 +20,8 @@ def get_os() -> str:
         raise Exception('Unidentified operating system.')
 
 
-def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, params: argparse, is_train: bool,
-                      viz: Any) -> Tuple[ParallelAgentsWrapper, int, bool, float, Dict[str, float]]:
+def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, params: argparse, is_train: bool) \
+        -> Tuple[ParallelAgentsWrapper, int, bool, float, Dict[str, float]]:
     eval_required = False
     epoch_reward = 0
     reward, terminal, state, terminal_due_to_timeout = agents.perform_actions(
@@ -31,12 +31,6 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
     start_step = step
     while not all(terminal):  # Loop ends only when all agents have terminated.
         action = policy.get_action(state, is_train)
-
-        # Send screen of each agent to visdom.
-        images = np.zeros((params.number_of_agents, 3, 84, 84))
-        for idx in range(params.number_of_agents):
-            images[idx, 1, :, :] = state[idx]
-            viz.image(images[idx], win='state_agent_' + str(idx), opts=dict(title='Agent ' + str(idx) + '\'s state'))
         reward, terminal, state, terminal_due_to_timeout = agents.perform_actions(action)
 
         # reward is a list. Passing it to update_observation changes its values hence all references should be

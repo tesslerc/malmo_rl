@@ -80,6 +80,14 @@ class Policy(AbstractPolicy):
                     (self.params.state_size, self.params.image_width, self.params.image_height), dtype=np.float32)
 
     def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
+        if self.params.viz is not None:
+            # Send screen of each agent to visdom.
+            images = np.zeros((self.params.number_of_agents, 3, 84, 84))
+            for idx in range(self.params.number_of_agents):
+                images[idx, 1, :, :] = states[idx]
+                self.params.viz.image(images[idx], win='state_agent_' + str(idx),
+                                      opts=dict(title='Agent ' + str(idx) + '\'s state'))
+
         # Normalize pixel values to [0,1] range.
         states = np.array(states).reshape(self.params.number_of_agents, self.params.image_width,
                                           self.params.image_height) / 255.0
@@ -142,7 +150,7 @@ class Policy(AbstractPolicy):
         # batch_action = List[a_1, a_2, ..., a_batch_size].
         # As a tensor it has a single dimension length of batch_size. Performing unsqueeze(-1) will add a dimension at
         # the end, making the dimensions 32x1 -> [[a_1], [a_2], ..., [a_batch_size]].
-        batch_action = Variable(torch.from_numpy(np.array(batch_action)).unsqueeze(-1)).type(torch.LongTensor)
+        batch_action = Variable(torch.from_numpy(np.array(batch_action)).unsqueeze(-1).type(torch.LongTensor))
         batch_reward = Variable(torch.from_numpy(np.array(batch_reward)).type(torch.FloatTensor))
         batch_next_state = Variable(torch.from_numpy(np.array(batch_next_state)).type(torch.FloatTensor))
         # not_done_mask contains 0 for terminal states and 1 for non-terminal states.
