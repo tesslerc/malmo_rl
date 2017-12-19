@@ -246,4 +246,4 @@ class Agent(ABC):
             preprocessed_state = preprocessed_state.convert('L')  # Grayscale conversion.
         else:
             preprocessed_state = preprocessed_state.convert('RGB')  # Any convert op. is required for numpy parsing.
-        return np.array(preprocessed_state)
+        return (np.array(preprocessed_state).astype(float)) / 255.0
