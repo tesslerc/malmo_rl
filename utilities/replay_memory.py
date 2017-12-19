@@ -22,7 +22,7 @@ class ReplayMemory(object):
         self.memory_size = params.replay_memory_size
         self.batch_size = params.batch_size
         self.state_size = params.state_size
-        self.memory: List[slim_observation] = [None] * self.memory_size
+        self.memory: List[slim_observation] = [None for _ in range(self.memory_size)]
         self.elements_in_memory = 0
 
         # Prioritized ER parameters.
@@ -77,12 +77,13 @@ class ReplayMemory(object):
 
             obs = self.memory[training_samples[index]]
             state = self._build_state(training_samples[index])
-            if obs.terminal is False:
+            if obs.terminal != 1:  # 1 means True.
                 next_state = self._build_state(training_samples[index] + 1)
             else:
                 # Instead of trying to infer state size, just return a state. The terminal flag denotes to disregard
                 # this 'next_state' object.
                 next_state = state
+
             mini_batch.append(observation(state=state, action=obs.action, reward=obs.reward, terminal=obs.terminal,
                                           next_state=next_state, index_in_memory=training_samples[index]))
 

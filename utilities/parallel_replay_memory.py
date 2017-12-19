@@ -8,10 +8,11 @@ class ParallelReplayMemory(ReplayMemory):
     def __init__(self, params: argparse) -> None:
         super(ParallelReplayMemory, self).__init__(params)
 
-        self.agents_observations: List[List[slim_observation]] = [[]] * self.params.number_of_agents
+        self.agents_observations: List[List[slim_observation]] = None
+        self._reset_agents_observations()
 
     def _reset_agents_observations(self):
-        self.agents_observations = [[]] * self.params.number_of_agents
+        self.agents_observations = [[] for _ in range(self.params.number_of_agents)]
 
     def add_observation(self, state, action: List[int], reward: List[float], terminal: List[int],
                         terminal_due_to_timeout: List[bool]) -> None:
@@ -27,8 +28,8 @@ class ParallelReplayMemory(ReplayMemory):
         # Once all agents have finished playing, insert all trajectories one after the other into the replay memory.
         # This behavior keeps our observations synced properly whilst allowing for multiple instances at once.
         if not agents_still_playing:
-            for observations in self.agents_observations:
-                for observation in observations:
+            for agent_idx in range(self.params.number_of_agents):
+                for observation in self.agents_observations[agent_idx]:
                     super(ParallelReplayMemory, self).add_observation(observation.state, observation.action,
                                                                       observation.reward, observation.terminal,
                                                                       observation.terminal_due_to_timeout)
