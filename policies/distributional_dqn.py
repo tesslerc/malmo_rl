@@ -81,6 +81,7 @@ class Policy(DQN_Policy):
         batch_reward = batch_reward.view(-1, 1).expand(self.params.batch_size, self.params.number_of_atoms)
 
         current_distributions, current_q = self.target_model(batch_state, self.atom_values)
+
         current_distributions = current_distributions.gather(1, expanded_batch_action).squeeze(1)
         current_q = current_q.gather(1, batch_action)
 
@@ -88,28 +89,21 @@ class Policy(DQN_Policy):
         # Loss is: cross entropy(Z(s, a), Z'(s, a))
         if self.params.double_dqn:
             _, q_values = self.model(batch_next_state, self.atom_values)
-            next_best_actions = Variable(q_values.data.max(1)[1].unsqueeze(-1)).view(-1, 1, 1).expand(
-                self.params.batch_size, 1, self.params.number_of_atoms)
-            next_distributions, _ = self.target_model(batch_next_state, self.atom_values)
-            next_distributions = next_distributions.gather(1, next_best_actions).squeeze(1)
         else:
             _, q_values = self.target_model(batch_next_state, self.atom_values)
-            q_values = q_values.detatch()
-            next_best_actions = Variable(q_values.data.max(1)[1].unsqueeze(-1)).view(-1, 1, 1).expand(
-                self.params.batch_size, 1, self.params.number_of_atoms)
-            next_distributions, _ = self.target_model(batch_next_state, self.atom_values)
-            next_distributions = next_distributions.gather(1, next_best_actions).squeeze(1)
 
-        target_distribution = zeros_like(next_distributions).detach()
+        next_best_actions = Variable(q_values.data.max(1)[1]).view(-1, 1, 1).expand(self.params.batch_size, 1,
+                                                                                    self.params.number_of_atoms)
+        next_distributions, _ = self.target_model(batch_next_state, self.atom_values)
+        next_distributions = next_distributions.gather(1, next_best_actions).squeeze(1)
 
+        target_distribution = zeros_like(current_distributions).detach()
         # Step A. is calculating the new indices.
         # Step B. calculate the new loss.
         # Calculate r + gamma * z(s', a)
-        max_q = ones_like(self.atom_values).float() * self.params.max_q_value
-        min_q = ones_like(self.atom_values).float() * self.params.min_q_value
-
-        Tz = torch.max(torch.min(self.atom_values * self.params.gamma + batch_reward, max_q), min_q)
-        bj = ((Tz - min_q) / self.delta_z).type(torch.FloatTensor)  # bj in [0, number_of_atoms - 1]
+        Tz = torch.clamp(self.atom_values * self.params.gamma + batch_reward, self.params.min_q_value,
+                         self.params.max_q_value)
+        bj = ((Tz - self.params.min_q_value) / self.delta_z).type(torch.FloatTensor)  # bj in [0, number_of_atoms - 1]
         m_l, m_u = bj.floor().data, bj.ceil().data
         m_l_numpy, m_u_numpy = m_l.numpy().astype(int), m_u.numpy().astype(int)
 
