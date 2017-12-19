@@ -59,7 +59,7 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
                 log_dict[item] = single_log_dict[item]
 
     for item in log_dict:
-        single_log_dict[item] = single_log_dict[item] * 1.0 / (step - start_step)
+        log_dict[item] = log_dict[item] * 1.0 / (step - start_step)
     return agents, step, eval_required, epoch_reward, log_dict
 
 
