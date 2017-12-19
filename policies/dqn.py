@@ -1,5 +1,4 @@
 import argparse
-import copy
 import math
 from random import random
 from typing import Dict, List
@@ -27,16 +26,17 @@ class Policy(AbstractPolicy):
 
         self.cuda: bool = torch.cuda.is_available()
         self.model: torch.nn.Module = self.create_model()
+        self.target_model: torch.nn.Module = self.create_model()
         if self.cuda:
             self.model.cuda()
+            self.target_model.cuda()
 
-        self.target_model: torch.nn.Module = copy.deepcopy(self.model)
-        self.optimizer = optim.RMSprop(self.model.parameters(), lr=self.params.lr)
+        self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, alpha=0.95, eps=0.01)
         self.criterion = torch.nn.MSELoss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
-        self.min_reward: int = 0.0
-        self.max_reward: int = 1.0
+        self.min_reward: int = None
+        self.max_reward: int = None
 
         self.previous_actions: List[int] = None
         self.previous_states: np.ndarray = None
@@ -46,29 +46,32 @@ class Policy(AbstractPolicy):
             dtype=np.float32)
 
     def create_model(self) -> torch.nn.Module:
-        return DQN(len(self.action_mapping))
+        return DQN(len(self.action_mapping), self.params.state_size)
 
     def update_observation(self, rewards: List[float], terminations: List[bool],
                            terminations_due_to_timeout: List[bool],
                            is_train: bool) -> None:
         # Normalizing reward forces all Q values to the range of [-1, 1]. This tends to help convergence.
         for idx, reward in enumerate(rewards):
-            if not terminations_due_to_timeout[idx]:
-                # Max reward is set to Rmax / (1 - gamma). This way Q(s, a) will be squashed to [-1, 1].
-                self.max_reward = max(self.max_reward, reward) if reward is not None else self.max_reward
-                self.min_reward = min(self.min_reward, reward) if reward is not None else self.min_reward
+            if not terminations_due_to_timeout[idx] and reward is not None:
+                self.max_reward = max(self.max_reward, reward) if self.max_reward is not None else reward
+                self.min_reward = min(self.min_reward, reward) if self.min_reward is not None else reward
 
-            if self.params.normalize_reward and rewards[idx] is not None:
-                normalized_reward = rewards[idx] - self.min_reward  # Now in range [0, abs(max - min)]
-                normalized_reward = normalized_reward / abs(self.max_reward - self.min_reward)  # Now in range [0, 1]
-                normalized_reward = (normalized_reward - 0.5) * 2  # Now in range [-1, 1]
-                if self.params.min_max_q_values > 0:
-                    # Now in range [-min_max_q, +min_max_q]
-                    normalized_reward = normalized_reward * self.params.min_max_q_values
-
-                # Finally, squash Q values to the range of [-min_max, +min_max]
-                rewards[idx] = normalized_reward * (1 - self.params.gamma)
-
+            if self.params.normalize_reward and rewards[idx] is not None \
+                    and self.max_reward != self.min_reward and self.max_reward is not None:
+                if self.params.min_q_value != self.params.max_q_value:
+                    normalized_reward = rewards[idx] - self.min_reward  # Now in range [0, (max - min)]
+                    normalized_reward = normalized_reward * 1.0 / abs(
+                        self.max_reward - self.min_reward)  # Now in range [0, 1]
+                    # Now in range [0, -min_q + max_q]
+                    normalized_reward = normalized_reward * 1.0 * (self.params.max_q_value - self.params.min_q_value)
+                    # Now in range [min_q, max_q]
+                    normalized_reward = normalized_reward + self.params.min_q_value
+                    # Finally, squash Q values to the range of [-min_max, +min_max]
+                    rewards[idx] = normalized_reward * (1.0 - self.params.gamma)
+                else:
+                    # Q values are limited to the range of [-1, 1]
+                    rewards[idx] = rewards[idx] * 1.0 / max(abs(self.min_reward), abs(self.max_reward))
         if self.previous_actions is not None and is_train:
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
                                                [int(terminal) for terminal in terminations],
@@ -88,9 +91,8 @@ class Policy(AbstractPolicy):
                 self.params.viz.image(images[idx], win='state_agent_' + str(idx),
                                       opts=dict(title='Agent ' + str(idx) + '\'s state'))
 
-        # Normalize pixel values to [0,1] range.
         states = np.array(states).reshape(self.params.number_of_agents, self.params.image_width,
-                                          self.params.image_height) / 255.0
+                                          self.params.image_height)
 
         self.current_state[:, :(self.params.state_size - 1)] = self.current_state[:, 1:]
         self.current_state[:, -1] = states
@@ -103,6 +105,8 @@ class Policy(AbstractPolicy):
                     -1. * (self.step - self.params.learn_start) / self.params.epsilon_decay)
             else:
                 epsilon = 1
+
+            self.update_target_network()
         else:
             epsilon = self.params.epsilon_test
 
@@ -117,6 +121,11 @@ class Policy(AbstractPolicy):
         return string_actions
 
     def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:
+        torch_state = torch.from_numpy(self.current_state)
+        if self.cuda:
+            torch_state = torch_state.cuda()
+        q_values = self.model(Variable(torch_state, volatile=True).type(torch.FloatTensor)).data
+
         if epsilon > random():
             # Random Action
             actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
@@ -124,7 +133,20 @@ class Policy(AbstractPolicy):
             torch_state = torch.from_numpy(self.current_state)
             if self.cuda:
                 torch_state = torch_state.cuda()
-            actions = self.model(Variable(torch_state, volatile=True)).data.max(1)[1].cpu()
+            actions = q_values.max(1)[1].cpu()
+
+        if self.params.viz is not None:
+            values = np.ones(len(self.action_mapping))
+            # Send Q distribution of each agent to visdom.
+            for idx in range(self.params.number_of_agents):
+                self.params.viz.bar(X=values, win='distribution_agent_' + str(idx),
+                                    Y=q_values[idx].numpy(),
+                                    opts=dict(
+                                        title='Agent ' + str(idx) + '\'s distribution',
+                                        stacked=False,
+                                        # legend=self.action_mapping
+                                    ))
+
         return actions
 
     def update_target_network(self) -> None:
@@ -142,19 +164,22 @@ class Policy(AbstractPolicy):
                         self.params.target_update_alpha * param.data + (1 - self.params.target_update_alpha) *
                         dict_params_model[name].data)
             else:
-                self.model = copy.deepcopy(self.target_model)
+                self.model.load_state_dict(self.target_model.state_dict())
 
     def train(self) -> Dict[str, float]:
+        if self.replay_memory.size() < self.params.batch_size or self.step % self.params.learn_frequency != 0:
+            return {}
+
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
-        batch_state = Variable(torch.from_numpy(np.array(batch_state)).type(torch.FloatTensor))
+        batch_state = Variable(torch.from_numpy(np.array(batch_state))).type(torch.FloatTensor)
         # batch_action = List[a_1, a_2, ..., a_batch_size].
         # As a tensor it has a single dimension length of batch_size. Performing unsqueeze(-1) will add a dimension at
         # the end, making the dimensions 32x1 -> [[a_1], [a_2], ..., [a_batch_size]].
-        batch_action = Variable(torch.from_numpy(np.array(batch_action)).unsqueeze(-1).type(torch.LongTensor))
-        batch_reward = Variable(torch.from_numpy(np.array(batch_reward)).type(torch.FloatTensor))
-        batch_next_state = Variable(torch.from_numpy(np.array(batch_next_state)).type(torch.FloatTensor))
+        batch_action = Variable(torch.from_numpy(np.array(batch_action)).unsqueeze(-1)).type(torch.LongTensor)
+        batch_reward = Variable(torch.from_numpy(np.array(batch_reward))).type(torch.FloatTensor)
+        batch_next_state = Variable(torch.from_numpy(np.array(batch_next_state))).type(torch.FloatTensor)
         # not_done_mask contains 0 for terminal states and 1 for non-terminal states.
-        not_done_mask = Variable(torch.from_numpy(1 - np.array(batch_terminal)).type(torch.FloatTensor))
+        not_done_mask = Variable(torch.from_numpy(1 - np.array(batch_terminal))).type(torch.FloatTensor)
         if self.cuda:
             batch_state = batch_state.cuda()
             batch_action = batch_action.cuda()
@@ -186,11 +211,12 @@ class Policy(AbstractPolicy):
         # Loss is: 0.5*(current_q_values - target_q_values)^2.
         # TD error is: current_q_values - target_q_values.
         if self.params.double_dqn:
-            next_best_actions = self.model(batch_next_state).detach().max(1)[1].unsqueeze(1)
-            next_max_q = self.target_model(batch_next_state).detach().gather(1, next_best_actions).squeeze(1)
+            next_best_actions = self.model(batch_next_state).max(1)[1].unsqueeze(1)
+            next_max_q = self.target_model(batch_next_state).gather(1, next_best_actions).squeeze(1)
         else:
-            next_max_q = self.target_model(batch_next_state).detach().max(1)[0]
-        next_q = next_max_q.mul(not_done_mask)
+            next_max_q = self.target_model(batch_next_state).max(1)[0]
+        next_q = next_max_q.mul(not_done_mask).detach()
+
         target_q = batch_reward + (self.params.gamma * next_q)
 
         td_error = (current_q - target_q).data.cpu().numpy()[0]
