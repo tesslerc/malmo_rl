@@ -136,15 +136,15 @@ class Policy(AbstractPolicy):
             actions = q_values.max(1)[1].cpu()
 
         if self.params.viz is not None:
-            values = np.ones(len(self.action_mapping))
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
+                values = np.eye(len(self.action_mapping))
                 self.params.viz.bar(X=values, win='distribution_agent_' + str(idx),
                                     Y=q_values[idx].numpy(),
                                     opts=dict(
                                         title='Agent ' + str(idx) + '\'s distribution',
                                         stacked=False,
-                                        # legend=self.action_mapping
+                                        legend=self.action_mapping
                                     ))
 
         return actions
