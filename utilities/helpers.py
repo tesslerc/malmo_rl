@@ -4,9 +4,26 @@ import sys
 from typing import Tuple, Dict, List
 
 import numpy as np
+from torch import nn
 
 from policies.policy import Policy
 from utilities.parallel_agents_wrapper import ParallelAgentsWrapper
+
+
+class DotDict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+
+def weights_init(m: nn.Module) -> None:
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:  # -1 means not found, i.e isn't a Conv layer.
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
 
 
 def get_os() -> str:
@@ -21,27 +38,31 @@ def get_os() -> str:
 
 
 def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, params: argparse, is_train: bool) \
-        -> Tuple[ParallelAgentsWrapper, int, bool, float, Dict[str, float]]:
+        -> Tuple[ParallelAgentsWrapper, int, bool, bool, float, int, Dict[str, float]]:
     eval_required = False
+    checkpoint_reached = False
     epoch_reward = 0
-    reward, terminal, state, terminal_due_to_timeout = agents.perform_actions(
-        ['new game'] * params.number_of_agents)  # Restart all the agents.
+    rewards, terminals, states, terminals_due_to_timeout = agents.perform_actions(
+        ['new game' for _ in range(params.number_of_agents)])  # Restart all the agents.
 
     log_dict = {}
     start_step = step
-    while not all(terminal):  # Loop ends only when all agents have terminated.
-        action = policy.get_action(state, is_train)
-        reward, terminal, state, terminal_due_to_timeout = agents.perform_actions(action)
+    successful_agents = 0
+    while not all(terminals):  # Loop ends only when all agents have terminated.
+        action = policy.get_action(states, is_train)
+        rewards, terminals, states, terminals_due_to_timeout = agents.perform_actions(action)
 
         # reward is a list. Passing it to update_observation changes its values hence all references should be
         # performed prior to calling update_observation.
-        for r in reward:
-            if r is not None:
-                epoch_reward += r
-        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', step, reward, terminal,
-                      terminal_due_to_timeout)
+        for idx, reward in enumerate(rewards):
+            if reward is not None:
+                epoch_reward += reward
+                if terminals[idx] and not terminals_due_to_timeout[idx]:
+                    successful_agents += 1
+        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', step, rewards, terminals,
+                      terminals_due_to_timeout)
 
-        policy.update_observation(reward, terminal, terminal_due_to_timeout, is_train)
+        policy.update_observation(rewards, terminals, terminals_due_to_timeout, is_train)
 
         if step > params.learn_start and is_train:
             single_log_dict = policy.train()
@@ -52,6 +73,9 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
 
         if step % params.eval_frequency == 0:
             eval_required = True
+        if step % params.checkpoint_interval == 0:
+            checkpoint_reached = True
+
         for item in single_log_dict:
             if item in log_dict:
                 log_dict[item] = log_dict[item] + single_log_dict[item]
@@ -60,7 +84,7 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
 
     for item in log_dict:
         log_dict[item] = log_dict[item] * 1.0 / (step - start_step)
-    return agents, step, eval_required, epoch_reward, log_dict
+    return agents, step, eval_required, checkpoint_reached, epoch_reward, successful_agents, log_dict
 
 
 def vis_plot(viz, log_dict: Dict[str, List[Tuple[int, float]]]):
