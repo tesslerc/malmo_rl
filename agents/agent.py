@@ -141,8 +141,8 @@ class Agent(ABC):
         while not world_state.has_mission_begun:
             time.sleep(5)
             world_state = self.agent_host.getWorldState()
-            for error in world_state.errors:
-                logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error: ' + error.text)
+            if world_state.errors:
+                logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error.')
             number_of_attempts += 1
             if number_of_attempts >= 100:
                 return False
@@ -226,8 +226,8 @@ class Agent(ABC):
                     return None, 0
 
             world_state = self.agent_host.getWorldState()
-            for error in world_state.errors:
-                logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error: ' + error.text)
+            if world_state.errors:
+                logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error.')
             current_r = sum(r.getValue() for r in world_state.rewards)
             return world_state, current_r
         except Exception as e:
