@@ -19,19 +19,19 @@ class ParallelAgentsWrapper(object):
         for agent_index, port in enumerate(self.ports):
             self.agents.append(agent_class(self.params, port, not malmo_exists, agent_index))
 
-        self.agent_running = [True] * self.params.number_of_agents
+        self.agent_running = [True for _ in range(self.params.number_of_agents)]
 
         self.previous_state = [np.zeros(
-            (self.params.image_width, self.params.image_height))] * self.params.number_of_agents
+            (self.params.image_width, self.params.image_height)) for _ in range(self.params.number_of_agents)]
 
     def perform_actions(self, actions: List[str]):
-        rewards = [None] * self.params.number_of_agents
-        terminations = [None] * self.params.number_of_agents
-        states = [None] * self.params.number_of_agents
-        terminations_due_to_timeout = [None] * self.params.number_of_agents
+        rewards = [None for _ in range(self.params.number_of_agents)]
+        terminations = [None for _ in range(self.params.number_of_agents)]
+        states = [None for _ in range(self.params.number_of_agents)]
+        terminations_due_to_timeout = [None for _ in range(self.params.number_of_agents)]
 
         if actions[0] == 'new game':
-            self.agent_running = [True] * self.params.number_of_agents
+            self.agent_running = [True for _ in range(self.params.number_of_agents)]
 
         results = []
         for idx, agent in enumerate(self.agents):

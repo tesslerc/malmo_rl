@@ -5,8 +5,8 @@ from utilities.replay_memory import ReplayMemory, slim_observation
 
 
 class ParallelReplayMemory(ReplayMemory):
-    def __init__(self, params: argparse) -> None:
-        super(ParallelReplayMemory, self).__init__(params)
+    def __init__(self, params: argparse, prioritized_experience_replay) -> None:
+        super(ParallelReplayMemory, self).__init__(params, prioritized_experience_replay)
 
         self.agents_observations: List[List[slim_observation]] = None
         self._reset_agents_observations()
