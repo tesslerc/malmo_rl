@@ -1,5 +1,10 @@
 from torch import nn
-from torch.nn import functional as F
+
+
+class Flatten(nn.Module):
+    def forward(self, x):
+        x = x.view(x.size()[0], -1)
+        return x
 
 
 class DQN(nn.Module):
@@ -11,17 +16,18 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.n_action = n_action
 
-        self.conv1 = nn.Conv2d(state_size, 32, kernel_size=8, stride=4, padding=0)  # (In Channel, Out Channel, ...)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0)
-
-        self.affine1 = nn.Linear(3136, 512)
-        self.affine2 = nn.Linear(512, self.n_action)
+        self.sequential_model = nn.Sequential(
+            nn.Conv2d(state_size, 32, kernel_size=8, stride=4, padding=0),  # (In Channel, Out Channel, ...)
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            Flatten(),
+            nn.Linear(3136, 512),
+            nn.ReLU(),
+            nn.Linear(512, self.n_action)
+        )
 
     def forward(self, x):
-        h = F.relu(self.conv1(x))
-        h = F.relu(self.conv2(h))
-        h = F.relu(self.conv3(h))
-        h = F.relu(self.affine1(h.view(h.size(0), -1)))
-        h = self.affine2(h)
-        return h
+        return self.sequential_model(x)
