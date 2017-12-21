@@ -60,7 +60,7 @@ class Agent(ABC):
         self.game_running = False
 
     def _initialize_malmo_communication(self):
-        logging.info('Agent[' + str(self.agent_index) + ']: Initializing Malmo communication.')
+        logging.debug('Agent[' + str(self.agent_index) + ']: Initializing Malmo communication.')
         # Add the default client - on the local machine:
         self.agent_host = self.MalmoPython.AgentHost()
         self.client = MalmoPython.ClientInfo("127.0.0.1", int(self.malmo_port))
@@ -123,6 +123,7 @@ class Agent(ABC):
             try:
                 number_of_attempts = 0
                 logging.debug('Agent[' + str(self.agent_index) + ']: Restarting the mission.')
+                time.sleep(5 * self.tick_time / 1000.0)
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
                 while not self.agent_host.getWorldState().has_mission_begun:
                     number_of_attempts += 1
@@ -214,7 +215,8 @@ class Agent(ABC):
             # wait for a frame to arrive after that
             num_frames_seen = world_state.number_of_video_frames_since_last_state
             number_of_attempts = 0
-            while world_state.is_mission_running and world_state.number_of_video_frames_since_last_state == num_frames_seen:
+            while world_state.is_mission_running and \
+                    world_state.number_of_video_frames_since_last_state == num_frames_seen:
                 time.sleep(self.tick_time / 1000.0)
                 world_state = self.agent_host.peekWorldState()
                 number_of_attempts += 1
