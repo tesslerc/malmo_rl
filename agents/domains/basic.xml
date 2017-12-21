@@ -69,18 +69,15 @@
       </VideoProducer>
       <ObservationFromFullStats />
       <DiscreteMovementCommands autoFall="true"/>
-        <!-- RewardForMissionEnd rewardForDeath="-10000">
-            <Reward description="found_goal" reward="0.5"/>
+        <RewardForMissionEnd rewardForDeath="-10000">
+            <Reward description="found_goal" reward="20"/>
             <Reward description="command_quota_reached" reward="-5"/>
-        </RewardForMissionEnd-->
-        <!--RewardForTouchingBlockType>
-          <Block type="gold_ore diamond_ore redstone_ore" reward="20" />
-        </RewardForTouchingBlockType-->
+        </RewardForMissionEnd>
       <RewardForSendingCommand reward="-1"/>
-        <!--AgentQuitFromTouchingBlockType>
+        <AgentQuitFromTouchingBlockType>
           <Block type="gold_block" description="found_goal" />
-        </AgentQuitFromTouchingBlockType-->
-        <!--AgentQuitFromReachingCommandQuota description="command_quota_reached" total="100"/-->
+        </AgentQuitFromTouchingBlockType>
+        <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="25"/>
     </AgentHandlers>
   </AgentSection>
 </Mission>
