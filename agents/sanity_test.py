@@ -19,6 +19,7 @@ class Agent(BaseAgent):
     """
 
     def __init__(self, params: argparse, port: int, start_malmo: bool, agent_index: int) -> None:
+        del start_malmo  # Not relevant.
         super(Agent, self).__init__(params, port, False, agent_index)
         self.state = 0
         self.steps = 0
