@@ -56,3 +56,9 @@ class Policy(AbstractPolicy):
 
     def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
         pass
+
+    def save_state(self):
+        pass
+
+    def load_state(self):
+        pass
