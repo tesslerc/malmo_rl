@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 from random import random
 from typing import Dict, List
 
@@ -10,6 +11,7 @@ from torch.autograd import Variable
 
 from policies.models.dqn import DQN
 from policies.policy import Policy as AbstractPolicy
+from utilities import helpers
 from utilities.parallel_replay_memory import ParallelReplayMemory
 
 
@@ -20,20 +22,21 @@ class Policy(AbstractPolicy):
     def __init__(self, params: argparse) -> None:
         super(Policy, self).__init__(params)
         self.step: int = 0
-        self.best_score: float = None
 
         self.action_mapping: List[str] = self.params.available_actions
 
         self.cuda: bool = torch.cuda.is_available()
         self.model: torch.nn.Module = self.create_model()
         self.target_model: torch.nn.Module = self.create_model()
+        self.target_model.apply(helpers.weights_init)
         if self.cuda:
             self.model.cuda()
             self.target_model.cuda()
+        self.update_target_network()
 
         self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, alpha=0.95, eps=0.01)
-        self.criterion = torch.nn.MSELoss()
-        self.replay_memory = ParallelReplayMemory(self.params)
+        self.criterion = torch.nn.SmoothL1Loss()
+        self.replay_memory = ParallelReplayMemory(self.params, self.params.prioritized_experience_replay)
 
         self.min_reward: int = None
         self.max_reward: int = None
@@ -44,6 +47,9 @@ class Policy(AbstractPolicy):
         self.current_state = np.zeros(
             (self.params.number_of_agents, self.params.state_size, self.params.image_width, self.params.image_height),
             dtype=np.float32)
+
+        if params.resume:
+            self.load_state()
 
     def create_model(self) -> torch.nn.Module:
         return DQN(len(self.action_mapping), self.params.state_size)
@@ -57,10 +63,10 @@ class Policy(AbstractPolicy):
                 self.max_reward = max(self.max_reward, reward) if self.max_reward is not None else reward
                 self.min_reward = min(self.min_reward, reward) if self.min_reward is not None else reward
 
-            if self.params.normalize_reward and rewards[idx] is not None \
-                    and self.max_reward != self.min_reward and self.max_reward is not None:
-                if self.params.min_q_value != self.params.max_q_value:
-                    normalized_reward = rewards[idx] - self.min_reward  # Now in range [0, (max - min)]
+            if self.params.normalize_reward and reward is not None and \
+                    self.max_reward is not None and self.min_reward is not None:
+                if self.params.min_q_value != self.params.max_q_value and self.max_reward != self.min_reward:
+                    normalized_reward = reward - self.min_reward  # Now in range [0, (max - min)]
                     normalized_reward = normalized_reward * 1.0 / abs(
                         self.max_reward - self.min_reward)  # Now in range [0, 1]
                     # Now in range [0, -min_q + max_q]
@@ -71,7 +77,8 @@ class Policy(AbstractPolicy):
                     rewards[idx] = normalized_reward * (1.0 - self.params.gamma)
                 else:
                     # Q values are limited to the range of [-1, 1]
-                    rewards[idx] = rewards[idx] * 1.0 / max(abs(self.min_reward), abs(self.max_reward))
+                    rewards[idx] = reward * (1.0 - self.params.gamma) / max(abs(self.min_reward), abs(self.max_reward))
+
         if self.previous_actions is not None and is_train:
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
                                                [int(terminal) for terminal in terminations],
@@ -91,8 +98,7 @@ class Policy(AbstractPolicy):
                 self.params.viz.image(images[idx], win='state_agent_' + str(idx),
                                       opts=dict(title='Agent ' + str(idx) + '\'s state'))
 
-        states = np.array(states).reshape(self.params.number_of_agents, self.params.image_width,
-                                          self.params.image_height)
+        states = np.array(states)
 
         self.current_state[:, :(self.params.state_size - 1)] = self.current_state[:, 1:]
         self.current_state[:, -1] = states
@@ -167,7 +173,9 @@ class Policy(AbstractPolicy):
                 self.model.load_state_dict(self.target_model.state_dict())
 
     def train(self) -> Dict[str, float]:
-        if self.replay_memory.size() < self.params.batch_size or self.step % self.params.learn_frequency != 0:
+        if self.replay_memory.size() < self.params.batch_size or \
+                self.replay_memory.size() < self.params.learn_start or \
+                self.step % self.params.learn_frequency != 0:
             return {}
 
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
@@ -198,7 +206,9 @@ class Policy(AbstractPolicy):
         loss.backward()
 
         if self.params.gradient_clipping > 0:
-            torch.nn.utils.clip_grad_norm(self.target_model.parameters(), self.params.gradient_clipping)
+            for param in self.target_model.parameters():
+                param.grad.data.clamp_(-self.params.gradient_clipping, self.params.gradient_clipping)
+
         self.optimizer.step()
 
         return {'loss': loss.data[0], 'td_error': td_error.mean()}
@@ -211,16 +221,40 @@ class Policy(AbstractPolicy):
         # Loss is: 0.5*(current_q_values - target_q_values)^2.
         # TD error is: current_q_values - target_q_values.
         if self.params.double_dqn:
-            next_best_actions = self.model(batch_next_state).max(1)[1].unsqueeze(1)
-            next_max_q = self.target_model(batch_next_state).gather(1, next_best_actions).squeeze(1)
+            next_best_actions = self.model(batch_next_state).max(1)[1].unsqueeze(-1)
+            next_max_q = self.target_model(batch_next_state).gather(1, next_best_actions).squeeze(-1)
         else:
             next_max_q = self.target_model(batch_next_state).max(1)[0]
-        next_q = next_max_q.mul(not_done_mask).detach()
+        next_q = next_max_q.mul(not_done_mask)
 
         target_q = batch_reward + (self.params.gamma * next_q)
-
         td_error = (current_q - target_q).data.cpu().numpy()[0]
 
         # Calculate the loss and propagate the gradients.
-        loss = self.criterion(current_q, target_q)
+        loss = self.criterion(current_q, target_q.detach())
         return loss, td_error
+
+    def save_state(self) -> None:
+        checkpoint = {
+            'model': self.model.state_dict(),
+            'target_model': self.target_model.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'step': self.step,
+            'min_reward': self.min_reward,
+            'max_reward': self.max_reward,
+
+        }
+        torch.save(checkpoint, 'saves/' + self.params.save_name + '.pth.tar')
+
+    def load_state(self) -> None:
+        if os.path.isfile('saves/' + self.params.save_name + '.pth.tar'):
+            checkpoint = torch.load('saves/' + self.params.save_name + '.pth.tar')
+
+            self.model.load_state_dict(checkpoint['model'])
+            self.target_model.load_state_dict(checkpoint['target_model'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.step = checkpoint['step']
+            self.min_reward = checkpoint['min_reward']
+            self.max_reward = checkpoint['max_reward']
+        else:
+            raise FileNotFoundError('Unable to resume saves/' + self.params.save_name + '.pth.tar')
