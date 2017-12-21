@@ -22,3 +22,11 @@ class Policy(ABC):
     @abstractmethod
     def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
         pass
+
+    @abstractmethod
+    def save_state(self) -> None:
+        pass
+
+    @abstractmethod
+    def load_state(self) -> None:
+        pass
