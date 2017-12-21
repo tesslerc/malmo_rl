@@ -20,7 +20,9 @@ class DISTRIBUTIONAL_DQN(nn.Module):
         self.affine1 = nn.Linear(3136, 512)
         self.affine2 = [nn.Linear(512, self.n_atoms) for _ in range(self.n_action)]
 
-    def forward(self, x, atom_values):
+        self.log_softmax = nn.LogSoftmax(dim=-1)
+
+    def forward(self, x, atom_values, log_softmax=False):
         h = F.relu(self.conv1(x))
         h = F.relu(self.conv2(h))
         h = F.relu(self.conv3(h))
@@ -28,11 +30,17 @@ class DISTRIBUTIONAL_DQN(nn.Module):
         h = F.relu(self.affine1(h.view(h.size(0), -1)))
 
         distribution_list = []
+        log_distribution_list = []
         for idx in range(self.n_action):
             # Each action 'a' outputs a discrete n_atoms distribution over Q(s,a).
             atoms = self.affine2[idx](h).unsqueeze(1)  # Add the action dimension.
             distribution_list.append(F.softmax(atoms, dim=-1))
+            if log_softmax:
+                log_distribution_list.append(self.log_softmax(atoms))
         distributions = torch.cat(distribution_list, 1)
 
         # Returns Q(s, a) probabilities and E[Q(s, a)]
+        if log_softmax:
+            log_distributions = torch.cat(log_distribution_list, 1)
+            return log_distributions, distributions @ atom_values
         return distributions, distributions @ atom_values
