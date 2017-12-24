@@ -1,6 +1,6 @@
-# Thanks to Felix Yu for the helpful reference.
+# Thanks to Felix Yu and Kai Arulkumaran for the helpful references.
 # Blog: https://flyyufelix.github.io/2017/10/24/distributional-bellman.html
-# Keras code: https://github.com/flyyufelix/C51-DDQN-Keras
+# Code: https://github.com/Kaixhin/Rainbow
 
 import argparse
 from random import random
@@ -49,10 +49,8 @@ class Policy(DQN_Policy):
         params.prioritized_experience_replay = False
         super(Policy, self).__init__(params)
 
-        self.delta_z = (self.params.max_q_value - self.params.min_q_value) / float(self.params.number_of_atoms - 1)
-        self.atom_values = Variable(torch.from_numpy(
-            np.array([self.params.min_q_value + i * self.delta_z for i in range(self.params.number_of_atoms)]))).type(
-            torch.FloatTensor)
+        self.delta_z = (self.params.max_q_value - self.params.min_q_value) * 1.0 / (self.params.number_of_atoms - 1)
+        self.atom_values = torch.linspace(self.params.min_q_value, self.params.max_q_value, self.params.number_of_atoms)
 
         self.criterion = torch.nn.KLDivLoss()
 
@@ -63,20 +61,20 @@ class Policy(DQN_Policy):
         torch_state = torch.from_numpy(self.current_state)
         if self.cuda:
             torch_state = torch_state.cuda()
-        distributions, q_values = self.model(Variable(torch_state, volatile=True).type(torch.FloatTensor),
-                                             self.atom_values)
+        distributions = self.model(Variable(torch_state, volatile=True).type(torch.FloatTensor))
+        q_values = distributions.data @ self.atom_values
 
         if epsilon > random():
             # Random Action
             actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
         else:
-            actions = q_values.data.max(1)[1].cpu()
+            actions = q_values.max(1)[1].cpu()
 
         if self.params.viz is not None:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
                 self.params.viz.bar(X=distributions.data.numpy()[idx, :, :].T, win='distribution_agent_' + str(idx),
-                                    Y=self.atom_values.data.numpy(),
+                                    Y=self.atom_values.numpy(),
                                     opts=dict(
                                         title='Agent ' + str(idx) + '\'s distribution',
                                         stacked=False,
@@ -89,70 +87,54 @@ class Policy(DQN_Policy):
         # Calculate expected Q values.
         expanded_batch_action = batch_action.view(-1, 1, 1).expand(self.params.batch_size, 1,
                                                                    self.params.number_of_atoms)
-        expanded_batch_reward = batch_reward.view(-1, 1).expand(self.params.batch_size, self.params.number_of_atoms)
+        not_done_mask = not_done_mask.data.unsqueeze(1)
 
-        current_distributions, current_q = self.target_model(batch_state, self.atom_values, True)
+        current_distributions = self.target_model(batch_state)
 
         current_distributions = current_distributions.gather(1, expanded_batch_action).squeeze(1)
-        current_q = current_q.gather(1, batch_action)
+        current_q = current_distributions.data.mul(self.atom_values)
 
         # Update rule: Z'(s, a) = r(s, a) + gamma * Z(s', argmax_a(Q(s' ,a))
         # Loss is: cross entropy(Z(s, a), Z'(s, a))
         if self.params.double_dqn:
-            _, q_values = self.model(batch_next_state, self.atom_values)
+            next_distributions = self.model(batch_next_state)
+            q_values = next_distributions.data @ self.atom_values
         else:
-            _, q_values = self.target_model(batch_next_state, self.atom_values)
+            next_distributions = self.target_model(batch_next_state)
+            q_values = next_distributions.data @ self.atom_values
 
-        next_best_actions = Variable(q_values.data.max(1)[1]).view(-1, 1, 1).expand(self.params.batch_size, 1,
-                                                                                    self.params.number_of_atoms)
-        next_distributions, _ = self.target_model(batch_next_state, self.atom_values)
-        next_distributions = next_distributions.gather(1, next_best_actions).squeeze(1)
+        next_best_actions = q_values.max(1)[1]
+        next_distributions = self.target_model(batch_next_state)
+        next_distributions = next_distributions[range(self.params.batch_size), next_best_actions].data
+        next_distributions *= not_done_mask
 
-        target_distribution = zeros_like(current_distributions).detach()
-        # Step A. is calculating the new indices.
-        # Step B. calculate the new loss.
-        # Calculate r + gamma * z(s', a)
-        Tz = torch.clamp(self.atom_values * self.params.gamma + expanded_batch_reward, self.params.min_q_value,
-                         self.params.max_q_value)
-        bj = ((Tz - self.params.min_q_value) / self.delta_z).type(torch.FloatTensor)  # bj in [0, number_of_atoms - 1]
-        m_l, m_u = bj.floor().data, bj.ceil().data
-        m_l_numpy, m_u_numpy = m_l.numpy().astype(int), m_u.numpy().astype(int)
+        # Compute Tz (Bellman operator T applied to z)
+        # Tz = R + γ*z (accounting for terminal states)
+        Tz = batch_reward.data.unsqueeze(1) + not_done_mask * self.params.gamma * self.atom_values.unsqueeze(0)
+        # Clamp between supported values.
+        # Supported values decreased by epsilon value to avoid scenario where discrete value falls directly on the
+        # support.
+        Tz = Tz.clamp(min=self.params.min_q_value, max=self.params.max_q_value)
+        # Compute L2 projection of Tz onto fixed support z
+        b = (Tz - self.params.min_q_value) / self.delta_z  # b = (Tz - Vmin) / Δz
+        l, u = b.floor().long(), b.ceil().long()
 
-        for batch_idx in range(self.params.batch_size):
-            if (not_done_mask[batch_idx].data == 1).numpy():
-                for atom_idx in range(self.params.number_of_atoms):
-                    if m_l_numpy[batch_idx, atom_idx] != m_u_numpy[batch_idx, atom_idx]:
-                        target_distribution[batch_idx, m_l_numpy[batch_idx, atom_idx]] = \
-                            target_distribution[batch_idx, m_l_numpy[batch_idx, atom_idx]] + \
-                            next_distributions[batch_idx, atom_idx] * (
-                                    m_u[batch_idx, atom_idx] - bj[batch_idx, atom_idx])
-                        target_distribution[batch_idx, m_u_numpy[batch_idx, atom_idx]] = \
-                            target_distribution[batch_idx, m_u_numpy[batch_idx, atom_idx]] + \
-                            next_distributions[batch_idx, atom_idx] * (
-                                    bj[batch_idx, atom_idx] - m_l[batch_idx, atom_idx])
-                    else:
-                        target_distribution[batch_idx, m_u_numpy[batch_idx, atom_idx]] = \
-                            target_distribution[batch_idx, m_u_numpy[batch_idx, atom_idx]] + \
-                            next_distributions[batch_idx, atom_idx]
-            else:
-                Tz_single = torch.clamp(batch_reward[batch_idx], self.params.min_q_value, self.params.max_q_value)
-                bj_single = ((Tz_single - self.params.min_q_value) / self.delta_z).type(torch.FloatTensor)
-                m_l_single, m_u_single = np.floor(bj_single.data.numpy())[0], np.ceil(bj_single.data.numpy())[0]
+        # Deltas denotes when u != l. This catches the times where the distribution falls directly on the support.
+        # In this case (u - b) + (b - l) = 0
+        deltas = 1 - (u - l)
 
-                if m_l_single != m_u_single:
-                    target_distribution[batch_idx, m_l_single] = \
-                        target_distribution[batch_idx, m_l_single] + \
-                        float(m_u_single) - bj_single
-                    target_distribution[batch_idx, m_u_single] = \
-                        target_distribution[batch_idx, m_u_single] + \
-                        bj_single - float(m_l_single)
-                else:
-                    target_distribution[batch_idx, m_u_single] = \
-                        target_distribution[batch_idx, m_u_single] + 1
+        # Distribute probability of Tz
+        m = batch_state.data.new(self.params.batch_size, self.params.number_of_atoms).zero_()
+        offset = torch.linspace(0, ((self.params.batch_size - 1) * self.params.number_of_atoms),
+                                self.params.batch_size).long().unsqueeze(1).expand(self.params.batch_size,
+                                                                                   self.params.number_of_atoms)
+        m.view(-1).index_add_(0, (l + offset).view(-1),
+                              (next_distributions * (u.float() - b)).view(-1))  # m_l = m_l + p(s_t+n, a*)(u - b)
+        m.view(-1).index_add_(0, (u + offset).view(-1),
+                              (next_distributions * (b - l.float())).view(-1))  # m_u = m_u + p(s_t+n, a*)(b - l)
 
-        td_error = (current_q - target_distribution @ self.atom_values).data.cpu().numpy()[0]
+        m.view(-1).index_add_(0, (l + offset).view(-1), deltas.float().view(-1))  # When m_u == m_l, add delta.
 
-        # Calculate the loss (one sided cross entropy) and propagate the gradients.
-        # loss = -torch.sum(target_distribution.mul(current_distributions))
-        loss = self.criterion(current_distributions, target_distribution.detach())
+        td_error = (current_q - m.mul(self.atom_values)).cpu().numpy()[0]
+        loss = -torch.sum(Variable(m) * current_distributions.log())
         return loss, td_error
