@@ -61,6 +61,10 @@ else:
     logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
     logging.info('then head over to http://localhost:8097')  # open this address on browser
 
+    if params.resume:
+        helpers.vis_plot(viz, train_log_dict)
+        helpers.vis_plot(viz, eval_log_dict)
+
 params.viz = viz
 
 agents = ParallelAgentsWrapper(Agent, params)
