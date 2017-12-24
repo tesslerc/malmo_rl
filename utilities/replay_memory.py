@@ -18,9 +18,8 @@ observation = namedtuple('observation', 'state, action, reward, terminal, next_s
 
 
 class ReplayMemory(object):
-    def __init__(self, params: argparse, prioritized_experience_replay) -> None:
+    def __init__(self, params: argparse) -> None:
         self.params = params
-        self.prioritized_experience_replay = prioritized_experience_replay
         self.memory_size = params.replay_memory_size
         self.success_memory_size = int(self.memory_size * 0.1)  # 10% of the size of the main memory.
         self.batch_size = params.batch_size
@@ -31,7 +30,7 @@ class ReplayMemory(object):
 
         # Success memory will only contain trajectories which lead to a successful finish of the task.
         self.success_memory: List[slim_observation] = [None for _ in range(self.success_memory_size)]
-        self.maximal_success_trajectory = 5  # For trajectories longer than this, we will keep only the last X steps.
+        self.maximal_success_trajectory = 10  # For trajectories longer than this, we will keep only the last X steps.
         self.success_sample_probability = 0.2  # 20% chance to sample from the success memory.
         self.elements_in_success_memory = 0
         self.success_insert_index = 0
@@ -40,9 +39,11 @@ class ReplayMemory(object):
         self.epsilon = 0.01
         self.alpha = 0.6
         it_capacity = 1
-        while it_capacity < self.memory_size:
-            it_capacity *= 2
-        self._it_sum = SumSegmentTree(it_capacity)
+        self._it_sum: SumSegmentTree = None
+        if self.params.prioritized_experience_replay:
+            while it_capacity < self.memory_size:
+                it_capacity *= 2
+            self._it_sum = SumSegmentTree(it_capacity)
         self._max_priority = 1.0
 
     def add_observation(self, state: object, action: int, reward: float, terminal: int,
@@ -51,7 +52,7 @@ class ReplayMemory(object):
                            slim_observation(state=state, action=action, reward=reward, terminal=terminal,
                                             terminal_due_to_timeout=terminal_due_to_timeout))
 
-        if self.prioritized_experience_replay:
+        if self.params.prioritized_experience_replay:
             # Update values in Sum and Min trees (Prioritized ER). To ensure all observations are sampled at least once,
             # they are initially set to maximal priority.
             priority = (self._max_priority + self.epsilon) ** self.alpha
@@ -91,7 +92,7 @@ class ReplayMemory(object):
         # Returns: Tuple[states, actions, rewards, termination values, next states, indices]
         mini_batch = []
 
-        if self.prioritized_experience_replay:
+        if self.params.prioritized_experience_replay:
             training_samples = self._sample_proportional(self.batch_size)
         else:
             training_samples = np.random.randint(low=(self.params.state_size - 1), high=(self.elements_in_memory - 1),
@@ -100,13 +101,19 @@ class ReplayMemory(object):
             if np.random.rand() > self.success_sample_probability or not self.params.success_replay_memory or \
                     self.elements_in_success_memory < self.params.state_size:
                 memory = self.memory
+
                 while memory[training_samples[index]].terminal_due_to_timeout or \
                         training_samples[index] < self.params.state_size:
                     # We do not learn from termination states due to timeout. Timeout is an artificial addition to make
                     # sure episodes end and the train/test procedure continues.
                     # Also make sure all samples are in the range [self.params.state_size, self.elements_in_memory - 1]
                     # to ensure that we can always build the first state and the next state.
-                    training_samples[index] = self._sample_proportional(1)[0]
+                    if self.params.prioritized_experience_replay:
+                        training_samples[index] = self._sample_proportional(1)[0]
+                    else:
+                        training_samples[index] = np.random.randint(low=(self.params.state_size - 1),
+                                                                    high=(self.elements_in_memory - 1), size=1)
+
                 sample_index = training_samples[index]
             else:
                 memory = self.success_memory
