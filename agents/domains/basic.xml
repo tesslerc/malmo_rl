@@ -77,7 +77,7 @@
         <AgentQuitFromTouchingBlockType>
           <Block type="gold_block" description="found_goal" />
         </AgentQuitFromTouchingBlockType>
-        <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="25"/>
+      <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="50"/>
     </AgentHandlers>
   </AgentSection>
 </Mission>
