@@ -34,9 +34,9 @@ class Policy(AbstractPolicy):
             self.target_model.cuda()
         self.update_target_network()
 
-        self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, alpha=0.95, eps=0.01)
+        self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, alpha=0.99, eps=1e-5)
         self.criterion = torch.nn.SmoothL1Loss()
-        self.replay_memory = ParallelReplayMemory(self.params, self.params.prioritized_experience_replay)
+        self.replay_memory = ParallelReplayMemory(self.params)
 
         self.min_reward: int = None
         self.max_reward: int = None
