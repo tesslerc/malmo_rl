@@ -90,9 +90,21 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
 def vis_plot(viz, log_dict: Dict[str, List[Tuple[int, float]]]):
     for field in log_dict:
         if '_mva' not in field:
+            _, values = zip(*log_dict[field])
+            values = np.array(values)
+            median_value = np.abs(np.median(values))
+            min_value = min(0, max(np.min(values), (-median_value * 10))) if field in ['td_error', 'loss'] else None
+            max_value = max(0, min(np.max(values), median_value * 10)) if field in ['td_error', 'loss'] else None
+
             plot_data = np.array(log_dict[field])
-            viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=field, opts=dict(title=field, legend=[field]))
+            viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=field,
+                     opts=dict(title=field, legend=[field], ytickmax=max_value,
+                               ytickmin=min_value))
             if (field + '_mva') in log_dict:
+
                 plot_data = np.array(log_dict[field + '_mva'])
                 viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=field, name=field + '_mva',
-                         opts=dict(showlegend=True, legend=[field + '_mva']), update='append')
+                         opts=dict(showlegend=True, legend=[field + '_mva'],
+                                   ytickmax=max_value,
+                                   ytickmin=min_value),
+                         update='append')
