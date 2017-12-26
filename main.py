@@ -71,6 +71,7 @@ agents = ParallelAgentsWrapper(Agent, params)
 policy = Policy(params)
 
 start_time = time.clock()
+start_step = step  # Not equal to zero when resuming from checkpoint.
 while step < params.max_steps:
     prev_step = step
     agents, step, eval_required, checkpoint_reached, _, _, episode_log_dict = helpers.play_full_episode(agents, policy,
@@ -122,7 +123,7 @@ while step < params.max_steps:
         logging.info('Average reward during eval (per epoch) is: %s.', total_eval_reward * 1.0 / eval_epochs)
         logging.info('Maximal reward during eval (accumulated over an epoch) is: %s.', max_eval_epoch_reward)
         logging.info('Train speed: %s steps/second. Test speed: %s steps/second',
-                     step * 1.0 / (time.clock() - start_time),
+                     (start_step - step) * 1.0 / (time.clock() - start_time),
                      eval_step * 1.0 / (time.clock() - eval_clock))
 
         if params.viz is not None:
