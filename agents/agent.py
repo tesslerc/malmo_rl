@@ -25,6 +25,7 @@ class Agent(ABC):
 
     def __init__(self, params: argparse, port: int, start_malmo: bool, agent_index: int) -> None:
         self.params = params
+        self.params.language_commands = False
         self.agent_index = agent_index
         # Malmo interface.
         self.minecraft = None
@@ -109,37 +110,39 @@ class Agent(ABC):
         # Restart world is called upon new mission (new game, mission stuck, agent dead, etc...).
         pass
 
-    def _load_mission_from_xml(self, mission_xml: str) -> None:
+    def _load_mission_from_xml(self, mission_xml: str) -> MalmoPython.MissionSpec:
         logging.debug('Agent[' + str(self.agent_index) + ']: Loading mission from XML.')
         # Given a string variable (containing the mission XML), will reload the mission itself.
 
         mission_xml = self.tick_regex.sub('<MsPerTick>' + str(self.params.ms_per_tick) + '</MsPerTick>', mission_xml)
 
         mission = self.MalmoPython.MissionSpec(mission_xml, True)
-        # mission.forceWorldReset()
+        return mission
+
+    def _load_mission_from_missionspec(self, mission: MalmoPython.MissionSpec):
         mission_record = self.MalmoPython.MissionRecordSpec()
 
         while not self.agent_host.getWorldState().has_mission_begun:
             try:
-                number_of_attempts = 0
                 logging.debug('Agent[' + str(self.agent_index) + ']: Restarting the mission.')
-                time.sleep(5 * self.tick_time / 1000.0)
+                time.sleep(0.5)
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
+
+                number_of_attempts = 0
                 while not self.agent_host.getWorldState().has_mission_begun:
                     number_of_attempts += 1
                     time.sleep(1)
-                    if number_of_attempts >= 20:
+                    if number_of_attempts >= 3:
                         break
             except RuntimeError as e:
-                logging.critical(
-                    'Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission', e)
+                logging.critical('Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission')
 
     def _wait_for_mission_to_begin(self) -> bool:
         logging.debug('Agent[' + str(self.agent_index) + ']: Waiting for mission to begin.')
         world_state = self.agent_host.getWorldState()
         number_of_attempts = 0
         while not world_state.has_mission_begun:
-            time.sleep(5)
+            time.sleep(0.5)
             world_state = self.agent_host.getWorldState()
             if world_state.errors:
                 logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error.')
@@ -246,6 +249,7 @@ class Agent(ABC):
         preprocessed_state = state.resize((width, height))
         if gray_scale:
             preprocessed_state = preprocessed_state.convert('L')  # Grayscale conversion.
+            return np.array(preprocessed_state).astype(float) / 255.0
         else:
             preprocessed_state = preprocessed_state.convert('RGB')  # Any convert op. is required for numpy parsing.
-        return (np.array(preprocessed_state).astype(float)) / 255.0
+            return np.transpose(np.array(preprocessed_state).astype(float), (2, 0, 1)) / 255.0
