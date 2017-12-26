@@ -30,11 +30,11 @@ class Policy(AbstractPolicy):
         self.target_model: torch.nn.Module = self.create_model()
         self.target_model.apply(helpers.weights_init)
         if self.cuda:
-            self.model.cuda()
-            self.target_model.cuda()
+            self.model = self.model.cuda()
+            self.target_model = self.target_model.cuda()
         self.update_target_network()
 
-        self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, alpha=0.99, eps=1e-5)
+        self.optimizer = optim.Adam(self.target_model.parameters(), lr=self.params.lr, eps=1.5e-4)
         self.criterion = torch.nn.SmoothL1Loss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
@@ -127,19 +127,16 @@ class Policy(AbstractPolicy):
         return string_actions
 
     def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:
-        torch_state = torch.from_numpy(self.current_state)
+        torch_state = torch.from_numpy(self.current_state).float()
         if self.cuda:
             torch_state = torch_state.cuda()
-        q_values = self.model(Variable(torch_state, volatile=True).type(torch.FloatTensor)).data
+        q_values = self.model(Variable(torch_state, volatile=True)).data.cpu()
 
         if epsilon > random():
             # Random Action
             actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
         else:
-            torch_state = torch.from_numpy(self.current_state)
-            if self.cuda:
-                torch_state = torch_state.cuda()
-            actions = q_values.max(1)[1].cpu()
+            actions = q_values.max(1)[1]
 
         if self.params.viz is not None:
             # Send Q distribution of each agent to visdom.
@@ -175,7 +172,8 @@ class Policy(AbstractPolicy):
     def train(self) -> Dict[str, float]:
         if self.replay_memory.size() < self.params.batch_size or \
                 self.replay_memory.size() < self.params.learn_start or \
-                self.step % self.params.learn_frequency != 0:
+                self.step % self.params.learn_frequency != 0 or \
+                self.step < self.params.learn_start:
             return {}
 
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
