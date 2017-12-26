@@ -16,8 +16,7 @@ class Agent(BaseAgent):
         self.reward_from_success = 0
 
     def _restart_world(self) -> None:
-        if not self.game_running:
-            self._initialize_malmo_communication()
+        self._initialize_malmo_communication()
 
         mission_file = './agents/domains/basic.xml'
         with open(mission_file, 'r') as f:
@@ -26,7 +25,8 @@ class Agent(BaseAgent):
 
             success = False
             while not success:
-                self._load_mission_from_xml(mission_xml)
+                mission = self._load_mission_from_xml(mission_xml)
+                self._load_mission_from_missionspec(mission)
                 success = self._wait_for_mission_to_begin()
 
             self.game_running = True
