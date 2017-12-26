@@ -75,7 +75,7 @@
         </RewardForMissionEnd>
       <RewardForSendingCommand reward="-1"/>
         <AgentQuitFromTouchingBlockType>
-          <Block type="gold_block" description="found_goal" />
+            <Block type="gold_block" description="found_goal"/>
         </AgentQuitFromTouchingBlockType>
       <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="50"/>
     </AgentHandlers>
