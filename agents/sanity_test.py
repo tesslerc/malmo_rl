@@ -28,8 +28,8 @@ class Agent(BaseAgent):
         self.state = 0
 
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
-        zeros_matrix = np.zeros((84, 84))
-        ones_matrix = np.ones_like(zeros_matrix).astype(float)
+        zeros_matrix = np.zeros((84, 84)).astype(float)
+        ones_matrix = np.ones((84, 84)).astype(float)
 
         self.steps += 1
         if self.steps >= 100:
@@ -46,6 +46,7 @@ class Agent(BaseAgent):
         else:  # self.state == 1
             self.state = 0
             if action_command == 'move 1':
+                self.steps = 0
                 return 0, True, zeros_matrix, False
             else:
                 return -1, False, zeros_matrix, False
