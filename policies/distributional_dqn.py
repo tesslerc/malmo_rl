@@ -51,6 +51,8 @@ class Policy(DQN_Policy):
 
         self.delta_z = (self.params.max_q_value - self.params.min_q_value) * 1.0 / (self.params.number_of_atoms - 1)
         self.atom_values = torch.linspace(self.params.min_q_value, self.params.max_q_value, self.params.number_of_atoms)
+        if self.cuda:
+            self.atom_values = self.atom_values.cuda()
 
         self.criterion = torch.nn.KLDivLoss()
 
@@ -58,23 +60,23 @@ class Policy(DQN_Policy):
         return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms, self.params.state_size)
 
     def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:
-        torch_state = torch.from_numpy(self.current_state)
+        torch_state = torch.from_numpy(self.current_state).float()
         if self.cuda:
             torch_state = torch_state.cuda()
-        distributions = self.model(Variable(torch_state, volatile=True).type(torch.FloatTensor))
-        q_values = distributions.data @ self.atom_values
+        distributions = self.model(Variable(torch_state, volatile=True)).data
+        q_values = (self.atom_values.expand_as(distributions) * distributions).sum(2).cpu()
 
         if epsilon > random():
             # Random Action
             actions = torch.from_numpy(np.random.randint(0, len(self.action_mapping), self.params.number_of_agents))
         else:
-            actions = q_values.max(1)[1].cpu()
+            actions = q_values.max(1)[1]
 
         if self.params.viz is not None:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
-                self.params.viz.bar(X=distributions.data.numpy()[idx, :, :].T, win='distribution_agent_' + str(idx),
-                                    Y=self.atom_values.numpy(),
+                self.params.viz.bar(X=distributions.cpu().numpy()[idx, :, :].T, win='distribution_agent_' + str(idx),
+                                    Y=self.atom_values.cpu().numpy(),
                                     opts=dict(
                                         title='Agent ' + str(idx) + '\'s distribution',
                                         stacked=False,
@@ -85,27 +87,23 @@ class Policy(DQN_Policy):
 
     def get_loss(self, batch_state, batch_action, batch_reward, not_done_mask, batch_next_state):
         # Calculate expected Q values.
-        expanded_batch_action = batch_action.view(-1, 1, 1).expand(self.params.batch_size, 1,
-                                                                   self.params.number_of_atoms)
         not_done_mask = not_done_mask.data.unsqueeze(1)
 
-        current_distributions = self.target_model(batch_state)
-
-        current_distributions = current_distributions.gather(1, expanded_batch_action).squeeze(1)
-        current_q = current_distributions.data.mul(self.atom_values)
+        current_distributions = self.target_model(batch_state)[range(self.params.batch_size), batch_action]
+        current_q = (self.atom_values.expand_as(current_distributions.data) * current_distributions.data).sum(2)
 
         # Update rule: Z'(s, a) = r(s, a) + gamma * Z(s', argmax_a(Q(s' ,a))
         # Loss is: cross entropy(Z(s, a), Z'(s, a))
         if self.params.double_dqn:
-            next_distributions = self.model(batch_next_state)
-            q_values = next_distributions.data @ self.atom_values
+            next_distributions = self.model(batch_next_state).data
+            q_values = (self.atom_values.expand_as(next_distributions) * next_distributions).sum(2)
         else:
-            next_distributions = self.target_model(batch_next_state)
-            q_values = next_distributions.data @ self.atom_values
+            next_distributions = self.target_model(batch_next_state).data
+            q_values = (self.atom_values.expand_as(next_distributions) * next_distributions).sum(2)
 
         next_best_actions = q_values.max(1)[1]
-        next_distributions = self.target_model(batch_next_state)
-        next_distributions = next_distributions[range(self.params.batch_size), next_best_actions].data
+        next_distributions = self.target_model(batch_next_state).data
+        next_distributions = next_distributions[range(self.params.batch_size), next_best_actions]
         next_distributions *= not_done_mask
 
         # Compute Tz (Bellman operator T applied to z)
@@ -121,20 +119,24 @@ class Policy(DQN_Policy):
 
         # Deltas denotes when u != l. This catches the times where the distribution falls directly on the support.
         # In this case (u - b) + (b - l) = 0
-        deltas = 1 - (u - l)
+        deltas = (1 - (u - l)).float()
+        deltas = deltas.mul(torch.pow(deltas.sum(1).unsqueeze(1).clamp(min=1), -1))
 
         # Distribute probability of Tz
         m = batch_state.data.new(self.params.batch_size, self.params.number_of_atoms).zero_()
         offset = torch.linspace(0, ((self.params.batch_size - 1) * self.params.number_of_atoms),
                                 self.params.batch_size).long().unsqueeze(1).expand(self.params.batch_size,
                                                                                    self.params.number_of_atoms)
+        if self.cuda:
+            offset = offset.cuda()
+
         m.view(-1).index_add_(0, (l + offset).view(-1),
                               (next_distributions * (u.float() - b)).view(-1))  # m_l = m_l + p(s_t+n, a*)(u - b)
         m.view(-1).index_add_(0, (u + offset).view(-1),
                               (next_distributions * (b - l.float())).view(-1))  # m_u = m_u + p(s_t+n, a*)(b - l)
-
         m.view(-1).index_add_(0, (l + offset).view(-1), deltas.float().view(-1))  # When m_u == m_l, add delta.
 
-        td_error = (current_q - m.mul(self.atom_values)).cpu().numpy()[0]
+        target_q = (self.atom_values.expand_as(m) * m).sum(1)
+        td_error = (current_q - target_q).cpu().numpy()[0]
         loss = -torch.sum(Variable(m) * current_distributions.log())
         return loss, td_error
