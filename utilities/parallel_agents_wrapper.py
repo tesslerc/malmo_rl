@@ -21,8 +21,12 @@ class ParallelAgentsWrapper(object):
 
         self.agent_running = [True for _ in range(self.params.number_of_agents)]
 
-        self.previous_state = [np.zeros(
-            (self.params.image_width, self.params.image_height)) for _ in range(self.params.number_of_agents)]
+        if self.params.retain_rgb:
+            self.previous_state = [np.zeros(
+                (3, self.params.image_width, self.params.image_height)) for _ in range(self.params.number_of_agents)]
+        else:
+            self.previous_state = [np.zeros(
+                (self.params.image_width, self.params.image_height)) for _ in range(self.params.number_of_agents)]
 
     def perform_actions(self, actions: List[str]):
         rewards = [None for _ in range(self.params.number_of_agents)]
