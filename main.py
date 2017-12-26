@@ -123,7 +123,7 @@ while step < params.max_steps:
         logging.info('Average reward during eval (per epoch) is: %s.', total_eval_reward * 1.0 / eval_epochs)
         logging.info('Maximal reward during eval (accumulated over an epoch) is: %s.', max_eval_epoch_reward)
         logging.info('Train speed: %s steps/second. Test speed: %s steps/second',
-                     (start_step - step) * 1.0 / (time.clock() - start_time),
+                     (step - start_step) * 1.0 / (time.clock() - start_time),
                      eval_step * 1.0 / (time.clock() - eval_clock))
 
         if params.viz is not None:
