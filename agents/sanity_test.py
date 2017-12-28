@@ -31,6 +31,8 @@ class Agent(BaseAgent):
         zeros_matrix = np.zeros((84, 84)).astype(float)
         ones_matrix = np.ones((84, 84)).astype(float)
 
+        random_reward = min(max(np.random.normal(-1, 0.1), -2), 0)
+
         self.steps += 1
         if self.steps >= 100:
             self.steps = 0
@@ -40,13 +42,13 @@ class Agent(BaseAgent):
         if self.state == 0:
             if action_command == 'turn 1':
                 self.state = 1
-                return -1, False, ones_matrix, False
+                return random_reward, False, ones_matrix, False
             else:
-                return -1, False, zeros_matrix, False
+                return random_reward, False, zeros_matrix, False
         else:  # self.state == 1
             self.state = 0
             if action_command == 'move 1':
                 self.steps = 0
                 return 0, True, zeros_matrix, False
             else:
-                return -1, False, zeros_matrix, False
+                return random_reward, False, zeros_matrix, False
