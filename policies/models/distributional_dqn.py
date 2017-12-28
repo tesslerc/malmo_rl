@@ -7,6 +7,9 @@ from policies.models.dqn import DQN
 class DISTRIBUTIONAL_DQN(DQN):
     """Implements a 3 layer convolutional network with 2 fully connected layers at the end as explained by:
     Bellamare et al. (2017) - https://arxiv.org/abs/1707.06887
+
+    The final layer projects the features onto (number of actions * number of atoms) supports.
+    For each action we receive a probability distribution of future Q values.
     """
 
     def __init__(self, n_action: int, n_atoms: int, state_size: int) -> None:

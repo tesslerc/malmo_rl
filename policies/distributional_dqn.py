@@ -43,18 +43,12 @@ def ones_like(x):
 
 class Policy(DQN_Policy):
     def __init__(self, params: argparse):
-        # Success replay memory and prioritized ER cause non uniform sampling from experience, which in turn causes
-        # convergence to the wrong distribution.
-        params.success_replay_memory = False
-        params.prioritized_experience_replay = False
         super(Policy, self).__init__(params)
 
         self.delta_z = (self.params.max_q_value - self.params.min_q_value) * 1.0 / (self.params.number_of_atoms - 1)
         self.atom_values = torch.linspace(self.params.min_q_value, self.params.max_q_value, self.params.number_of_atoms)
         if self.cuda:
             self.atom_values = self.atom_values.cuda()
-
-        self.criterion = torch.nn.KLDivLoss()
 
     def create_model(self) -> torch.nn.Module:
         return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms, self.params.state_size)
@@ -64,7 +58,7 @@ class Policy(DQN_Policy):
         if self.cuda:
             torch_state = torch_state.cuda()
         distributions = self.model(Variable(torch_state, volatile=True)).data
-        q_values = (self.atom_values.expand_as(distributions) * distributions).sum(2).cpu()
+        q_values = torch.mul(distributions, self.atom_values.expand_as(distributions)).sum(2).cpu()
 
         if epsilon > random():
             # Random Action
@@ -89,8 +83,13 @@ class Policy(DQN_Policy):
         # Calculate expected Q values.
         not_done_mask = not_done_mask.data.unsqueeze(1)
 
-        current_distributions = self.target_model(batch_state)[range(self.params.batch_size), batch_action]
-        current_q = (self.atom_values.expand_as(current_distributions.data) * current_distributions.data).sum(2)
+        batch_action = batch_action.view(self.params.batch_size, 1, 1)
+        action_mask = batch_action.expand(self.params.batch_size, 1, self.params.number_of_atoms)
+
+        current_distributions = self.target_model(batch_state)
+        current_distributions_gathered = current_distributions.gather(1, action_mask).squeeze()
+
+        current_q = torch.mul(current_distributions_gathered.data, self.atom_values).sum(1)
 
         # Update rule: Z'(s, a) = r(s, a) + gamma * Z(s', argmax_a(Q(s' ,a))
         # Loss is: cross entropy(Z(s, a), Z'(s, a))
@@ -102,8 +101,11 @@ class Policy(DQN_Policy):
             q_values = (self.atom_values.expand_as(next_distributions) * next_distributions).sum(2)
 
         next_best_actions = q_values.max(1)[1]
+        next_best_actions = next_best_actions.view(self.params.batch_size, 1, 1)
+        next_best_actions_mask = next_best_actions.expand(self.params.batch_size, 1, self.params.number_of_atoms)
+
         next_distributions = self.target_model(batch_next_state).data
-        next_distributions = next_distributions[range(self.params.batch_size), next_best_actions]
+        next_distributions = next_distributions.gather(1, next_best_actions_mask).squeeze()
         next_distributions *= not_done_mask
 
         # Compute Tz (Bellman operator T applied to z)
@@ -137,6 +139,7 @@ class Policy(DQN_Policy):
         m.view(-1).index_add_(0, (l + offset).view(-1), deltas.float().view(-1))  # When m_u == m_l, add delta.
 
         target_q = (self.atom_values.expand_as(m) * m).sum(1)
-        td_error = (current_q - target_q).cpu().numpy()[0]
-        loss = -torch.sum(Variable(m) * current_distributions.log())
+        td_error = (current_q - target_q).cpu().numpy()
+        loss = -torch.sum(Variable(m) * current_distributions_gathered.log())
+
         return loss, td_error
