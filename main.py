@@ -57,7 +57,7 @@ if params.no_visualization:
     viz = None
 else:
     from visdom import Visdom
-    viz = Visdom()
+    viz = Visdom(env=params.save_name)
     logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
     logging.info('then head over to http://localhost:8097')  # open this address on browser
 
