@@ -65,17 +65,6 @@ class Policy(AbstractPolicy):
 
             if self.params.normalize_reward and reward is not None and \
                     self.max_reward is not None and self.min_reward is not None:
-                if self.params.min_q_value != self.params.max_q_value and self.max_reward != self.min_reward:
-                    normalized_reward = reward - self.min_reward  # Now in range [0, (max - min)]
-                    normalized_reward = normalized_reward * 1.0 / abs(
-                        self.max_reward - self.min_reward)  # Now in range [0, 1]
-                    # Now in range [0, -min_q + max_q]
-                    normalized_reward = normalized_reward * 1.0 * (self.params.max_q_value - self.params.min_q_value)
-                    # Now in range [min_q, max_q]
-                    normalized_reward = normalized_reward + self.params.min_q_value
-                    # Finally, squash Q values to the range of [-min_max, +min_max]
-                    rewards[idx] = normalized_reward * (1.0 - self.params.gamma)
-                else:
                     # Q values are limited to the range of [-1, 1]
                     rewards[idx] = reward * (1.0 - self.params.gamma) / max(abs(self.min_reward), abs(self.max_reward))
 
