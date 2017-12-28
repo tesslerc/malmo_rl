@@ -1,5 +1,7 @@
 import argparse
 import random
+import threading
+from queue import Queue
 from typing import List
 
 import numpy as np
@@ -37,11 +39,17 @@ class ParallelAgentsWrapper(object):
         if actions[0] == 'new game':
             self.agent_running = [True for _ in range(self.params.number_of_agents)]
 
-        results = []
+        results_queue = Queue()
+        threads = []
         for idx, agent in enumerate(self.agents):
-            results.append(self.agent_perform_action(agent, actions[idx], idx))
+            threads.append(threading.Thread(target=self.agent_perform_action,
+                                            args=(agent, actions[idx], idx, results_queue)))
+            threads[-1].start()
 
-        for result in results:
+        for thread in threads:
+            thread.join()
+
+            result = results_queue.get()
             idx, reward, terminal, state, terminal_due_to_timeout = result
             rewards[idx] = reward
             terminations[idx] = terminal
@@ -55,7 +63,7 @@ class ParallelAgentsWrapper(object):
 
         return rewards, terminations, states, terminations_due_to_timeout
 
-    def agent_perform_action(self, agent, action, idx):
+    def agent_perform_action(self, agent, action, idx, results_queue):
         if self.agent_running[idx]:
             reward, terminal, state, terminal_due_to_timeout = agent.perform_action(action)
             if terminal:
@@ -64,4 +72,4 @@ class ParallelAgentsWrapper(object):
             reward, terminal, state, terminal_due_to_timeout = (
                 None, True, np.empty(0), True)
 
-        return tuple((idx, reward, terminal, state, terminal_due_to_timeout))
+        results_queue.put(tuple((idx, reward, terminal, state, terminal_due_to_timeout)))
