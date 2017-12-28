@@ -25,7 +25,7 @@ class Policy(AbstractPolicy):
 
         self.action_mapping: List[str] = self.params.available_actions
 
-        self.cuda: bool = torch.cuda.is_available()
+        self.cuda: bool = torch.cuda.is_available() and not self.params.no_cuda
         self.model: torch.nn.Module = self.create_model()
         self.target_model: torch.nn.Module = self.create_model()
         self.target_model.apply(helpers.weights_init)
