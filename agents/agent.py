@@ -125,14 +125,14 @@ class Agent(ABC):
         while not self.agent_host.getWorldState().has_mission_begun:
             try:
                 logging.debug('Agent[' + str(self.agent_index) + ']: Restarting the mission.')
-                time.sleep(0.5)
+                time.sleep(self.tick_time / 1000.0 * 5)
                 self.agent_host.startMission(mission, self.client_pool, mission_record, 0, str(self.experiment_id))
 
                 number_of_attempts = 0
                 while not self.agent_host.getWorldState().has_mission_begun:
                     number_of_attempts += 1
-                    time.sleep(1)
-                    if number_of_attempts >= 3:
+                    time.sleep(self.tick_time / 1000.0)
+                    if number_of_attempts >= 30:
                         break
             except RuntimeError as e:
                 logging.critical('Agent[' + str(self.agent_index) + ']: _load_mission_from_xml, Error starting mission')
@@ -142,12 +142,12 @@ class Agent(ABC):
         world_state = self.agent_host.getWorldState()
         number_of_attempts = 0
         while not world_state.has_mission_begun:
-            time.sleep(0.5)
+            time.sleep(self.tick_time / 1000.0)
             world_state = self.agent_host.getWorldState()
             if world_state.errors:
                 logging.error('Agent[' + str(self.agent_index) + ']: _wait_for_mission_to_begin, Error.')
             number_of_attempts += 1
-            if number_of_attempts >= 100:
+            if number_of_attempts >= 600:
                 return False
         return True
 
@@ -168,7 +168,7 @@ class Agent(ABC):
                     return self._manual_reward_and_terminal(action_command, reward, terminal, state, world_state)
 
             number_of_attempts += 1
-            time.sleep(3 * self.tick_time / 1000.0)
+            time.sleep(self.tick_time / 1000.0)
             if number_of_attempts >= 100:
                 logging.error('Agent[' + str(self.agent_index) + ']: Failed to send action.')
                 self.game_running = False
