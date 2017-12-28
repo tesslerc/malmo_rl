@@ -64,7 +64,7 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
 
         policy.update_observation(rewards, terminals, terminals_due_to_timeout, is_train)
 
-        if step > params.learn_start and is_train:
+        if is_train:
             single_log_dict = policy.train()
         else:
             single_log_dict = {}
@@ -100,11 +100,11 @@ def vis_plot(viz, log_dict: Dict[str, List[Tuple[int, float]]]):
             viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=field,
                      opts=dict(title=field, legend=[field], ytickmax=max_value,
                                ytickmin=min_value))
-            if (field + '_mva') in log_dict:
+            '''if (field + '_mva') in log_dict:
 
                 plot_data = np.array(log_dict[field + '_mva'])
                 viz.line(X=plot_data[:, 0], Y=plot_data[:, 1], win=field, name=field + '_mva',
                          opts=dict(showlegend=True, legend=[field + '_mva'],
                                    ytickmax=max_value,
                                    ytickmin=min_value),
-                         update='append')
+                         update='append')'''
