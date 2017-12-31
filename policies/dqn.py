@@ -13,7 +13,7 @@ from policies.models.dqn import DQN
 from policies.policy import Policy as AbstractPolicy
 from utilities import helpers
 from utilities.parallel_replay_memory import ParallelReplayMemory
-
+from utilities.adamw_optimizer import AdamW
 
 # TODO: A2C.
 
@@ -34,7 +34,7 @@ class Policy(AbstractPolicy):
             self.target_model = self.target_model.cuda()
         self.update_target_network()
 
-        self.optimizer = optim.Adam(self.target_model.parameters(), lr=self.params.lr, eps=1.5e-4)
+        self.optimizer = AdamW(self.target_model.parameters(), lr=self.params.lr, eps=1.5e-4)
         self.criterion = torch.nn.SmoothL1Loss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
