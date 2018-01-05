@@ -59,10 +59,10 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
                 epoch_reward += reward
                 if success[idx]:
                     successful_agents[idx] = 1
-        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s, sucess: %s', step, rewards, terminals,
-                      terminals_due_to_timeout, success)
+        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s, sucess: %s', step, rewards,
+                      terminals, terminals_due_to_timeout, success)
 
-        policy.update_observation(rewards, terminals, terminals_due_to_timeout, is_train)
+        policy.update_observation(rewards, terminals, terminals_due_to_timeout, success, is_train)
 
         if is_train:
             single_log_dict = policy.train()

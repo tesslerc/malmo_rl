@@ -53,7 +53,7 @@ class Policy(AbstractPolicy):
         return DQN(len(self.action_mapping), self.params.state_size)
 
     def update_observation(self, rewards: List[float], terminations: List[bool],
-                           terminations_due_to_timeout: List[bool],
+                           terminations_due_to_timeout: List[bool], success: List[bool],
                            is_train: bool) -> None:
         # Normalizing reward forces all Q values to the range of [-1, 1]. This tends to help convergence.
         for idx, reward in enumerate(rewards):
@@ -68,11 +68,10 @@ class Policy(AbstractPolicy):
 
         if self.previous_actions is not None and is_train:
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
-                                               [int(terminal) for terminal in terminations],
-                                               terminations_due_to_timeout)
+                                               terminations, terminations_due_to_timeout, success)
 
         for idx, terminal in enumerate(terminations):
-            if terminal:
+            if terminal or terminal is None:
                 self.current_state[idx] = np.zeros(
                     (self.params.state_size, self.params.image_width, self.params.image_height), dtype=np.float32)
 

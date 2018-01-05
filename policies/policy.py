@@ -20,7 +20,8 @@ class Policy(ABC):
         pass
 
     @abstractmethod
-    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
+    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, success: bool,
+                           is_train: bool) -> None:
         pass
 
     @abstractmethod

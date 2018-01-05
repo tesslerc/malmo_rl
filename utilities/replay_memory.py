@@ -13,7 +13,7 @@ from utilities.segment_tree import SumSegmentTree
 #   reward:   r_(t+1) (reward received due to being at state s_t and performing action a_t which transitions to state
 #                       s_(t+1))
 #   terminal: t_(t+1) (whether or not the next state is a terminal state)
-slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, terminal_due_to_timeout')
+slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, terminal_due_to_timeout, success')
 observation = namedtuple('observation', 'state, action, reward, terminal, next_state, index_in_memory')
 
 
@@ -47,9 +47,10 @@ class ReplayMemory(object):
             self._max_priority = 1.0
 
     def add_observation(self, state: object, action: int, reward: float, terminal: int,
-                        terminal_due_to_timeout: bool) -> None:
+                        terminal_due_to_timeout: bool, success: bool) -> None:
         self.memory[self.insert_index] = slim_observation(state=state, action=action, reward=reward, terminal=terminal,
-                                                          terminal_due_to_timeout=terminal_due_to_timeout)
+                                                          terminal_due_to_timeout=terminal_due_to_timeout,
+                                                          success=success)
 
         if self.params.prioritized_experience_replay:
             # Update values in Sum and Min trees (Prioritized ER). To ensure all observations are sampled at least once,
@@ -61,7 +62,7 @@ class ReplayMemory(object):
                 priority = 0.0
             self._it_sum[self.insert_index] = priority
 
-        if terminal == 1 and not terminal_due_to_timeout and self.params.success_replay_memory:
+        if success and self.params.success_replay_memory:
             # Find trajectory start index
             trajectory_length = 0
             while trajectory_length < self.maximal_success_trajectory and \
@@ -177,23 +178,26 @@ class ParallelReplayMemory(ReplayMemory):
     def _reset_agents_observations(self):
         self.agents_observations = [[] for _ in range(self.params.number_of_agents)]
 
-    def add_observation(self, state, action: List[int], reward: List[float], terminal: List[int],
-                        terminal_due_to_timeout: List[bool]) -> None:
+    def add_observation(self, state, action: List[int], reward: List[float], terminal: List[bool],
+                        terminal_due_to_timeout: List[bool], success: List[bool]) -> None:
         agents_still_playing = False
         for idx, r in enumerate(reward):
-            if r is not None:
-                if terminal[idx] == 0:
+            if r is not None and terminal[idx] is not None:
+                if not terminal[idx]:
                     agents_still_playing = True
                 self.agents_observations[idx].append(
-                    slim_observation(state=state[idx], action=action[idx], reward=reward[idx], terminal=terminal[idx],
-                                     terminal_due_to_timeout=terminal_due_to_timeout[idx]))
+                    slim_observation(state=state[idx], action=action[idx], reward=reward[idx],
+                                     terminal=int(terminal[idx]), terminal_due_to_timeout=terminal_due_to_timeout[idx],
+                                     success=success[idx]))
 
         # Once all agents have finished playing, insert all trajectories one after the other into the replay memory.
         # This behavior keeps our observations synced properly whilst allowing for multiple instances at once.
         if not agents_still_playing:
             for agent_idx in range(self.params.number_of_agents):
-                for observation in self.agents_observations[agent_idx]:
-                    super(ParallelReplayMemory, self).add_observation(observation.state, observation.action,
-                                                                      observation.reward, observation.terminal,
-                                                                      observation.terminal_due_to_timeout)
+                for _slim_observation in self.agents_observations[agent_idx]:
+                    super(ParallelReplayMemory, self).add_observation(_slim_observation.state, _slim_observation.action,
+                                                                      _slim_observation.reward,
+                                                                      _slim_observation.terminal,
+                                                                      _slim_observation.terminal_due_to_timeout,
+                                                                      _slim_observation.success)
             self._reset_agents_observations()
