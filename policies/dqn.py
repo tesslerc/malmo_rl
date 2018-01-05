@@ -12,10 +12,8 @@ from torch.autograd import Variable
 from policies.models.dqn import DQN
 from policies.policy import Policy as AbstractPolicy
 from utilities import helpers
-from utilities.parallel_replay_memory import ParallelReplayMemory
+from utilities.replay_memory import ParallelReplayMemory
 from utilities.adamw_optimizer import AdamW
-
-# TODO: A2C.
 
 
 class Policy(AbstractPolicy):
