@@ -47,17 +47,17 @@ class Agent(BaseAgent):
 
     def _manual_reward_and_terminal(self, action_command: str, reward: float, terminal: bool, state: np.ndarray,
                                     world_state) -> \
-            Tuple[float, bool, np.ndarray, bool]:  # returns: reward, terminal, state, terminal due to timeout.
+            Tuple[float, bool, np.ndarray, bool, bool]:  # returns: reward, terminal, state, timeout, success.
         del world_state  # Not in use here.
 
         if reward > 0:
             # Reached goal successfully.
-            return self.reward_from_success, True, state, False
+            return self.reward_from_success, True, state, False, True
 
         # Since basic agents don't have the notion of time, hence death due to timeout breaks the markovian assumption
         # of the problem. By setting terminal_due_to_timeout, different agents can decide if to learn or not from these
         # states, thus ensuring a more robust solution and better chances of convergence.
         if reward < -5:
-            return -1, True, state, True
+            return -1, True, state, True, False
 
-        return -1, False, state, False
+        return -1, False, state, False, False
