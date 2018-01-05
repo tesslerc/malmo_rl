@@ -42,25 +42,25 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
     eval_required = False
     checkpoint_reached = False
     epoch_reward = 0
-    rewards, terminals, states, terminals_due_to_timeout = agents.perform_actions(
+    rewards, terminals, states, terminals_due_to_timeout, success = agents.perform_actions(
         ['new game' for _ in range(params.number_of_agents)])  # Restart all the agents.
 
     log_dict = {}
     start_step = step
-    successful_agents = 0
-    while not all(terminals):  # Loop ends only when all agents have terminated.
+    successful_agents = [0 for _ in range(params.number_of_agents)]
+    while not all([t or t is None for t in terminals]):  # Loop ends only when all agents have terminated.
         action = policy.get_action(states, is_train)
-        rewards, terminals, states, terminals_due_to_timeout = agents.perform_actions(action)
+        rewards, terminals, states, terminals_due_to_timeout, success = agents.perform_actions(action)
 
         # reward is a list. Passing it to update_observation changes its values hence all references should be
         # performed prior to calling update_observation.
         for idx, reward in enumerate(rewards):
             if reward is not None:
                 epoch_reward += reward
-                if terminals[idx] and not terminals_due_to_timeout[idx]:
-                    successful_agents += 1
-        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s', step, rewards, terminals,
-                      terminals_due_to_timeout)
+                if success[idx]:
+                    successful_agents[idx] = 1
+        logging.debug('step: %s, reward: %s, terminal: %s, terminal_due_to_timeout: %s, sucess: %s', step, rewards, terminals,
+                      terminals_due_to_timeout, success)
 
         policy.update_observation(rewards, terminals, terminals_due_to_timeout, is_train)
 
@@ -84,7 +84,7 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
 
     for item in log_dict:
         log_dict[item] = log_dict[item] * 1.0 / (step - start_step)
-    return agents, step, eval_required, checkpoint_reached, epoch_reward, successful_agents, log_dict
+    return agents, step, eval_required, checkpoint_reached, epoch_reward, sum(successful_agents), log_dict
 
 
 def vis_plot(viz, log_dict: Dict[str, List[Tuple[int, float]]]):
