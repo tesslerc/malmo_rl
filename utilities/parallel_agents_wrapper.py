@@ -35,6 +35,7 @@ class ParallelAgentsWrapper(object):
         terminations = [None for _ in range(self.params.number_of_agents)]
         states = [None for _ in range(self.params.number_of_agents)]
         terminations_due_to_timeout = [None for _ in range(self.params.number_of_agents)]
+        successful_agents = [None for _ in range(self.params.number_of_agents)]
 
         if actions[0] == 'new game':
             self.agent_running = [True for _ in range(self.params.number_of_agents)]
@@ -50,26 +51,27 @@ class ParallelAgentsWrapper(object):
             thread.join()
 
             result = results_queue.get()
-            idx, reward, terminal, state, terminal_due_to_timeout = result
+            idx, reward, terminal, state, terminal_due_to_timeout, success = result
             rewards[idx] = reward
             terminations[idx] = terminal
             # Cosmetics, used to keep the termination screen valid while other agents are not done yet.
-            if terminal:
+            if terminal or terminal is None:
                 state = self.previous_state[idx]
             else:
                 self.previous_state[idx] = state
             states[idx] = state
             terminations_due_to_timeout[idx] = terminal_due_to_timeout
+            successful_agents[idx] = success
 
-        return rewards, terminations, states, terminations_due_to_timeout
+        return rewards, terminations, states, terminations_due_to_timeout, successful_agents
 
     def agent_perform_action(self, agent, action, idx, results_queue):
         if self.agent_running[idx]:
-            reward, terminal, state, terminal_due_to_timeout = agent.perform_action(action)
-            if terminal:
+            reward, terminal, state, terminal_due_to_timeout, success = agent.perform_action(action)
+            if terminal or terminal_due_to_timeout:
                 self.agent_running[idx] = False
         else:
-            reward, terminal, state, terminal_due_to_timeout = (
-                None, True, np.empty(0), True)
+            reward, terminal, state, terminal_due_to_timeout, success = (
+                None, None, None, None, False)
 
-        results_queue.put(tuple((idx, reward, terminal, state, terminal_due_to_timeout)))
+        results_queue.put(tuple((idx, reward, terminal, state, terminal_due_to_timeout, success)))
