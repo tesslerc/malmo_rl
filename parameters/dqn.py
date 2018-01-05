@@ -22,8 +22,4 @@ parser.add_argument('--gradient_clipping', type=float, default=1.0,
 parser.add_argument('--learn_start', type=int, default=1000)
 parser.add_argument('--double_dqn', default=False, action='store_true')
 parser.add_argument('--normalize_reward', default=False, action='store_true')
-parser.add_argument('--min_q_value', default=-10.0, type=float,
-                    help='All Q values will be normalized to the range of [min, max].')
-parser.add_argument('--max_q_value', default=0.0, type=float,
-                    help='All Q values will be normalized to the range of [min, max].')
 parser.add_argument('--success_replay_memory', default=False, action='store_true')
