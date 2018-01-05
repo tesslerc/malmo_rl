@@ -1,6 +1,6 @@
 import argparse
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict
 
 import numpy as np
 
@@ -30,3 +30,6 @@ class Policy(ABC):
     @abstractmethod
     def load_state(self) -> None:
         pass
+
+    def train(self) -> Dict[str, float]:
+        return {}
