@@ -56,7 +56,7 @@
         <Placement x="-203.5" y="81.0" z="217.5" yaw="0"/>
     </AgentStart>
     <AgentHandlers>
-        <ObservationFromGrid> <!-- to detect block beneath us -->
+        <ObservationFromGrid>
             <Grid name="floor3x3">
                 <min x="-1" y="-1" z="-1"/>
                 <max x="1" y="1" z="1"/>
@@ -73,7 +73,7 @@
             <Reward description="found_goal" reward="20"/>
             <Reward description="command_quota_reached" reward="-5"/>
         </RewardForMissionEnd>
-      <RewardForSendingCommand reward="-1"/>
+        <RewardForSendingCommand reward="-1"/>
         <AgentQuitFromTouchingBlockType>
             <Block type="gold_block" description="found_goal"/>
         </AgentQuitFromTouchingBlockType>
