@@ -27,9 +27,14 @@ class Agent(BaseAgent):
     def _restart_world(self) -> None:
         self.state = 0
 
-    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
-        zeros_matrix = np.zeros((84, 84)).astype(float)
-        ones_matrix = np.ones((84, 84)).astype(float)
+    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool, bool]:
+        if self.params.retain_rgb:
+            zeros_matrix = np.zeros((3, 84, 84)).astype(float)
+            ones_matrix = np.zeros((3, 84, 84)).astype(float)
+            ones_matrix[0, :, :] = 1
+        else:
+            zeros_matrix = np.zeros((84, 84)).astype(float)
+            ones_matrix = np.ones((84, 84)).astype(float)
 
         random_reward = min(max(np.random.normal(-1, 0.1), -2), 0)
 
@@ -37,18 +42,18 @@ class Agent(BaseAgent):
         if self.steps >= 100:
             self.steps = 0
             self.state = 0
-            return -1, True, ones_matrix, True
+            return -1, True, ones_matrix, True, False
 
         if self.state == 0:
             if action_command == 'turn 1':
                 self.state = 1
-                return random_reward, False, ones_matrix, False
+                return random_reward, False, ones_matrix, False, False
             else:
-                return random_reward, False, zeros_matrix, False
+                return random_reward, False, zeros_matrix, False, False
         else:  # self.state == 1
             self.state = 0
             if action_command == 'move 1':
                 self.steps = 0
-                return 0, True, zeros_matrix, False
+                return 0, True, zeros_matrix, False, True
             else:
-                return random_reward, False, zeros_matrix, False
+                return random_reward, False, zeros_matrix, False, False
