@@ -151,7 +151,7 @@ class Agent(ABC):
                 return False
         return True
 
-    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool]:
+    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool, bool]:
         assert (action_command in self.supported_actions)
         number_of_attempts = 0
         logging.debug('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
@@ -172,7 +172,7 @@ class Agent(ABC):
             if number_of_attempts >= 100:
                 logging.error('Agent[' + str(self.agent_index) + ']: Failed to send action.')
                 self.game_running = False
-                return 0, True, np.empty(0), True
+                return 0, True, np.empty(0), True, False
 
     def _get_new_state(self, new_game: bool) -> Tuple[float, bool, np.ndarray, MalmoPython.WorldState, bool]:
         logging.debug('Agent[' + str(self.agent_index) + ']: _get_new_state.')
@@ -239,10 +239,11 @@ class Agent(ABC):
             return None, 0
 
     def _manual_reward_and_terminal(self, action_command: str, reward: float, terminal: bool, state: np.ndarray,
-                                    world_state: object) -> Tuple[float, bool, np.ndarray, bool]:
+                                    world_state: object) -> Tuple[float, bool, np.ndarray, bool, bool]:
         del world_state, action_command  # Not used in the base implementation.
         terminal_due_to_timeout = False  # Default behavior is allow training on all states.
-        return reward, terminal, state, terminal_due_to_timeout
+        success = False  # Default behavior, no success signal exists.
+        return reward, terminal, state, terminal_due_to_timeout, success
 
     @staticmethod
     def _preprocess_state(state: Image.Image, width: int, height: int, gray_scale: bool) -> np.ndarray:
@@ -253,3 +254,15 @@ class Agent(ABC):
         else:
             preprocessed_state = preprocessed_state.convert('RGB')  # Any convert op. is required for numpy parsing.
             return np.transpose(np.array(preprocessed_state).astype(float), (2, 0, 1)) / 255.0
+
+    @staticmethod
+    def _get_direction_from_yaw(yaw) -> str:
+        normalised_yaw = yaw % 360
+        if (normalised_yaw >= 45 and normalised_yaw < 135):
+            return 'west'
+        elif (normalised_yaw >= 135 and normalised_yaw < 225):
+            return 'north'
+        elif (normalised_yaw >= 225 and normalised_yaw < 315):
+            return 'east'
+        else:
+            return 'south'
