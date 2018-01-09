@@ -12,16 +12,24 @@ class DISTRIBUTIONAL_DQN(DQN):
     For each action we receive a probability distribution of future Q values.
     """
 
-    def __init__(self, n_action: int, n_atoms: int, state_size: int) -> None:
+    def __init__(self, n_action: int, n_atoms: int, state_size: int, use_softmax: bool) -> None:
         super(DISTRIBUTIONAL_DQN, self).__init__(n_atoms * n_action, state_size)
         self.n_action = n_action
         self.n_atoms = n_atoms
+        self.use_softmax = use_softmax
 
     def forward(self, x):
         output = super(DISTRIBUTIONAL_DQN, self).forward(x)
 
-        # Returns Q(s, a) probabilities and E[Q(s, a)]
-        # Probabilities with action over second dimension
-        probs = torch.stack([F.softmax(p, dim=1) for p in output.chunk(self.n_action, 1)], 1)
+        if self.use_softmax:
+            # Returns Q(s, a) probabilities.
+            # Probabilities with action over second dimension
+            probs = torch.stack([F.softmax(p, dim=1) for p in output.chunk(self.n_action, 1)], 1)
 
-        return probs.clamp(min=1e-8, max=1 - 1e-8)  # Use clipping to prevent NaNs
+            return probs.clamp(min=1e-8, max=1 - 1e-8)  # Use clipping to prevent NaNs
+
+        else:
+            # Returns quantiles, either pre-softmax representation or supports for each quanta.
+            quantiles = torch.stack([p for p in output.chunk(self.n_action, 1)], 1)
+
+            return quantiles
