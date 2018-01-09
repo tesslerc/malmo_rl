@@ -49,12 +49,13 @@ class Policy(AbstractPolicy):
             print('Ending simulation.')
             exit(0)
 
-        return [action_command]
+        return [action_command for _ in range(self.params.number_of_agents)]
 
     def parse_action(self, key_code: int) -> str:
         return self.action_mapping[key_code]
 
-    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, is_train: bool) -> None:
+    def update_observation(self, reward: float, terminal: bool, terminal_due_to_timeout: bool, success: bool,
+                           is_train: bool) -> None:
         pass
 
     def save_state(self):
