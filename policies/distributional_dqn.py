@@ -42,7 +42,8 @@ def ones_like(x):
 
 
 class Policy(DQN_Policy):
-    def __init__(self, params: argparse):
+    def __init__(self, params: argparse, quantile_regression=False):
+        self.quantile_regression = quantile_regression
         super(Policy, self).__init__(params)
 
         self.delta_z = (self.params.max_q_value - self.params.min_q_value) * 1.0 / (self.params.number_of_atoms - 1)
@@ -51,7 +52,9 @@ class Policy(DQN_Policy):
             self.atom_values = self.atom_values.cuda()
 
     def create_model(self) -> torch.nn.Module:
-        return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms, self.params.state_size)
+        return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms,
+                                  self.params.state_size * (3 if self.params.retain_rgb else 1),
+                                  not self.quantile_regression)
 
     def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:
         torch_state = torch.from_numpy(self.current_state).float()
