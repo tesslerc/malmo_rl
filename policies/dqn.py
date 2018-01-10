@@ -16,6 +16,16 @@ from utilities.replay_memory import ParallelReplayMemory
 from utilities.adamw_optimizer import AdamW
 
 
+def exp_lr_scheduler(optimizer, epoch, lr_decay=0.1, lr_decay_epoch=7):
+    """Decay learning rate by a factor of lr_decay every lr_decay_epoch epochs"""
+    if epoch % lr_decay_epoch:
+        return optimizer
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] *= lr_decay
+    return optimizer
+
+
 class Policy(AbstractPolicy):
     def __init__(self, params: argparse) -> None:
         super(Policy, self).__init__(params)
@@ -32,7 +42,7 @@ class Policy(AbstractPolicy):
             self.target_model = self.target_model.cuda()
         self.update_target_network()
 
-        self.optimizer = AdamW(self.target_model.parameters(), lr=self.params.lr, eps=1.5e-4)
+        self.optimizer = optim.RMSprop(self.target_model.parameters(), lr=self.params.lr, eps=0.01, alpha=0.95)
         self.criterion = torch.nn.SmoothL1Loss()
         self.replay_memory = ParallelReplayMemory(self.params)
 
@@ -209,6 +219,7 @@ class Policy(AbstractPolicy):
                 param.grad.data.clamp_(-self.params.gradient_clipping, self.params.gradient_clipping)
 
         self.optimizer.step()
+        self.optimizer = exp_lr_scheduler(self.optimizer, epoch=self.step, lr_decay=0.99999, lr_decay_epoch=1)
 
         return {'loss': loss.data[0], 'td_error': td_error.mean()}
 
