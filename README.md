@@ -24,10 +24,10 @@ This package comes with several prebuilt policies:
 * [DQN](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf)
 * [C51-DQN - Distributional](https://arxiv.org/abs/1707.06887)
 
-![C51-DQN](https://i.imgur.com/UHZWnOl.png)
+![C51-DQN](https://i.imgur.com/UHZWnOl.png "Probability distribution function.")
 * [QR-DQN - Quantile Regression](https://arxiv.org/abs/1710.10044)
 
-![QR-DQN](https://i.imgur.com/spMScJs.png)
+![QR-DQN](https://i.imgur.com/spMScJs.png "Cumulative distribution function.")
 
 ### Requirements
 * Python 3.6
