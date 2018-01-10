@@ -21,12 +21,11 @@
 ### Policies out of the box
 This package comes with several prebuilt policies:
 * Interactive - Allows user controlled behavior over the environment using `{'w','s','a','d','space','e'}` and `'q'` which will quit.
-* (DQN)[https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf]
-* (C51-DQN - Distributional)[https://arxiv.org/abs/1707.06887]
+* [DQN](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf)
+* [C51-DQN - Distributional](https://arxiv.org/abs/1707.06887)
 
 ![C51-DQN](https://i.imgur.com/UHZWnOl.png)
-
-* (QR-DQN - Quantile Regression)[https://arxiv.org/abs/1710.10044]
+* [QR-DQN - Quantile Regression](https://arxiv.org/abs/1710.10044)
 
 ![QR-DQN](https://i.imgur.com/spMScJs.png)
 
