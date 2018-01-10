@@ -32,7 +32,7 @@ class ReplayMemory(object):
         if self.params.success_replay_memory:
             self.success_memory: List[slim_observation] = [None for _ in range(self.success_memory_size)]
             self.maximal_success_trajectory = 10  # For trajectories longer, we will keep only the last X steps.
-            self.success_sample_probability = 0.2  # 20% chance to sample from the success memory.
+            self.success_sample_probability = 0.1  # 10% chance to sample from the success memory.
             self.elements_in_success_memory = 0
             self.success_insert_index = 0
 
