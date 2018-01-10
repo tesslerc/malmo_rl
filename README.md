@@ -1,5 +1,7 @@
 # A [Malmo](https://github.com/Microsoft/malmo) reinforcement learning environment
 
+![Visdom graphs](https://i.imgur.com/tygQ5qS.png)
+
 ## Project structure
 * Agents - These set of classes control the environment. They define the task, and given a command from a policy - pass it to Malmo and return a tuple (s, a, r, t).
 * Policies - These define the behavior of the agent. Can be either hard-coded, user controlled (for example, the interactive policy) or machine learned.
@@ -21,7 +23,12 @@ This package comes with several prebuilt policies:
 * Interactive - Allows user controlled behavior over the environment using `{'w','s','a','d','space','e'}` and `'q'` which will quit.
 * (DQN)[https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf]
 * (C51-DQN - Distributional)[https://arxiv.org/abs/1707.06887]
+
+![C51-DQN](https://i.imgur.com/UHZWnOl.png)
+
 * (QR-DQN - Quantile Regression)[https://arxiv.org/abs/1710.10044]
+
+![QR-DQN](https://i.imgur.com/spMScJs.png)
 
 ### Requirements
 * Python 3.6
