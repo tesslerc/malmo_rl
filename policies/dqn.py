@@ -67,7 +67,7 @@ class Policy(AbstractPolicy):
                            is_train: bool) -> None:
         # Normalizing reward forces all Q values to the range of [-1, 1]. This tends to help convergence.
         for idx, reward in enumerate(rewards):
-            if not terminations_due_to_timeout[idx] and reward is not None:
+            if not terminations_due_to_timeout[idx] and reward is not None and reward != 0:
                 self.max_reward = max(self.max_reward, reward) if self.max_reward is not None else reward
                 self.min_reward = min(self.min_reward, reward) if self.min_reward is not None else reward
 
@@ -122,7 +122,7 @@ class Policy(AbstractPolicy):
         if is_train:
             self.previous_actions, self.previous_states = actions.numpy().tolist(), states
             if not self.params.retain_rgb:
-                self.previous_states = np.expand_dims(self.previous_states, dim=0)
+                self.previous_states = np.expand_dims(self.previous_states, axis=0)
 
         string_actions = []
         for action in actions:
