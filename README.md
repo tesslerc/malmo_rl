@@ -1,6 +1,6 @@
 # A [Malmo](https://github.com/Microsoft/malmo) reinforcement learning environment
 
-![Visdom graphs](https://i.imgur.com/tygQ5qS.png)
+![Visdom graphs](https://i.imgur.com/85mSFlY.png)
 
 ## Project structure
 * Agents - These set of classes control the environment. They define the task, and given a command from a policy - pass it to Malmo and return a tuple (s, a, r, t).
