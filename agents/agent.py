@@ -152,6 +152,7 @@ class Agent(ABC):
         return True
 
     def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool, bool]:
+        # Returns: reward, terminal, state, terminal due to timeout, success
         assert (action_command in self.supported_actions)
         number_of_attempts = 0
         logging.debug('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
@@ -184,7 +185,6 @@ class Agent(ABC):
             world_state, r = self._get_updated_world_state()
             current_r += r
 
-            # TODO: This is an issue... waiting for non-zero reward if a zero reward scenario is a legit option.
             if world_state is not None:
                 if world_state.is_mission_running and len(world_state.observations) > 0 \
                         and not (world_state.observations[-1].text == "{}") and len(world_state.video_frames) > 0:
@@ -198,7 +198,7 @@ class Agent(ABC):
                     return current_r, True, np.empty(0), world_state, True
 
             number_of_attempts += 1
-            if number_of_attempts >= 100:
+            if number_of_attempts >= 10:
                 logging.error('Agent[' + str(self.agent_index) + ']: _get_new_state, Unable to retrieve state.')
                 self.game_running = False
                 return 0, False, np.empty(0), None, False
@@ -231,6 +231,7 @@ class Agent(ABC):
             world_state = self.agent_host.getWorldState()
             if world_state.errors:
                 logging.error('Agent[' + str(self.agent_index) + ']: _get_updated_world_state, Error.')
+                return None, 0
             current_r = sum(r.getValue() for r in world_state.rewards)
             return world_state, current_r
         except Exception as e:
@@ -258,11 +259,11 @@ class Agent(ABC):
     @staticmethod
     def _get_direction_from_yaw(yaw) -> str:
         normalised_yaw = yaw % 360
-        if (normalised_yaw >= 45 and normalised_yaw < 135):
+        if 45 <= normalised_yaw < 135:
             return 'west'
-        elif (normalised_yaw >= 135 and normalised_yaw < 225):
+        elif 135 <= normalised_yaw < 225:
             return 'north'
-        elif (normalised_yaw >= 225 and normalised_yaw < 315):
+        elif 225 <= normalised_yaw < 315:
             return 'east'
         else:
             return 'south'
