@@ -99,6 +99,8 @@ class Policy(AbstractPolicy):
                                       opts=dict(title='Agent ' + str(idx) + '\'s state'))
 
         states = np.array(states)
+        if not self.params.retain_rgb:
+            states = np.expand_dims(states, axis=1)
 
         self.current_state[:, :(self.params.state_size - 1) * (3 if self.params.retain_rgb else 1)] = \
             self.current_state[:, 1 * (3 if self.params.retain_rgb else 1):]
@@ -121,8 +123,6 @@ class Policy(AbstractPolicy):
 
         if is_train:
             self.previous_actions, self.previous_states = actions.numpy().tolist(), states
-            if not self.params.retain_rgb:
-                self.previous_states = np.expand_dims(self.previous_states, axis=0)
 
         string_actions = []
         for action in actions:
