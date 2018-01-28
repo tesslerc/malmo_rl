@@ -153,7 +153,7 @@ class Policy(AbstractPolicy):
         return actions.data.cpu(), log_probs, entropies, values.squeeze()
 
     def train(self, next_states) -> Dict[str, float]:
-        if not (self.all_finished or self.step % self.params.learn_frequency == 0):
+        if not self.all_finished:
             return {}
 
         policy_loss = 0
