@@ -30,9 +30,19 @@ class Policy(AbstractPolicy):
             113: 'quit',  # Q (quit)
         }
 
-    def get_action(self, state: List[np.ndarray], is_train: bool) -> List[str]:
-        del state
+    def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
         del is_train
+
+        if self.params.viz is not None:
+            # Send screen of each agent to visdom.
+            images = np.zeros((self.params.number_of_agents, 3, 84, 84))
+            for idx in range(self.params.number_of_agents):
+                if self.params.retain_rgb:
+                    images[idx, :, :, :] = states[idx]
+                else:
+                    images[idx, 1, :, :] = states[idx]
+                self.params.viz.image(images[idx], win='state_agent_' + str(idx),
+                                      opts=dict(title='Agent ' + str(idx) + '\'s state'))
 
         while True:
             try:
