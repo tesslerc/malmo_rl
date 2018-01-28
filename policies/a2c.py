@@ -172,7 +172,7 @@ class Policy(AbstractPolicy):
 
         for agent_idx in range(self.params.number_of_agents):
             R = value[agent_idx].squeeze().data
-            if self.all_finished:
+            if self.terminals[agent_idx] and not self.timeouts[agent_idx]:
                 R *= 0
 
             self.values[agent_idx].append(Variable(R))
