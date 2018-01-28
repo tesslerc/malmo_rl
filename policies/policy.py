@@ -32,5 +32,5 @@ class Policy(ABC):
     def load_state(self) -> None:
         pass
 
-    def train(self) -> Dict[str, float]:
+    def train(self, next_state) -> Dict[str, float]:
         return {}

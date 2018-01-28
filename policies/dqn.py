@@ -172,7 +172,8 @@ class Policy(AbstractPolicy):
             else:
                 self.model.load_state_dict(self.target_model.state_dict())
 
-    def train(self) -> Dict[str, float]:
+    def train(self, next_state) -> Dict[str, float]:
+        del next_state  # not required.
         if self.replay_memory.size() < self.params.batch_size or \
                 self.replay_memory.size() < self.params.learn_start or \
                 self.step % self.params.learn_frequency != 0 or \
