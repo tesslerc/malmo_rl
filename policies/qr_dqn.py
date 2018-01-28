@@ -14,8 +14,8 @@ class Policy(DISTRIBUTIONAL_POLICY):
         super(Policy, self).__init__(params, quantile_regression=True)
 
         self.support_weight = 1.0 / self.params.number_of_atoms
-        self.cdf = np.cumsum(np.ones(self.params.number_of_atoms,
-                                     np.float) * self.support_weight, -1)
+        self.cdf = np.cumsum(np.ones(self.params.number_of_atoms, np.float) * self.support_weight, -1)
+        self.mid_supports = self.cdf - self.support_weight / 2
 
         self.criterion = torch.nn.SmoothL1Loss(reduce=False)
 
@@ -88,9 +88,9 @@ class Policy(DISTRIBUTIONAL_POLICY):
         #     for atom_idx in range(self.params.number_of_atoms):
         #         u = current_quantiles_gathered[batch_idx, atom_idx] - sorted_target[batch_idx, atom_idx]
         #         if (u.data.cpu() < 0).numpy():
-        #             multiplier = np.abs(self.cdf[0, atom_idx] - 1)
+        #             multiplier = np.abs(self.mid_supports[0, atom_idx] - 1)
         #         else:
-        #             multiplier = self.cdf[0, atom_idx]
+        #             multiplier = self.mid_supports[0, atom_idx]
         #
         #         loss += per_element_loss[batch_idx, atom_idx] * multiplier
 
@@ -99,7 +99,7 @@ class Policy(DISTRIBUTIONAL_POLICY):
         u = np.minimum(0, u)
         u[u != 0] = 1.0
 
-        cdf = np.tile(self.cdf, (self.params.batch_size, 1))
+        cdf = np.tile(self.mid_supports, (self.params.batch_size, 1))
         multiplier = Variable(torch.from_numpy(np.abs(cdf - u)).float())
 
         if self.cuda:
