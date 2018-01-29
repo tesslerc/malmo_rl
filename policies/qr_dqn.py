@@ -82,8 +82,6 @@ class Policy(DISTRIBUTIONAL_POLICY):
 
         sorted_target = Ttheta.sort()[0]
 
-        per_element_loss = self.criterion(current_quantiles_gathered, Variable(sorted_target).detach())
-
         # for batch_idx in range(self.params.batch_size):
         #     for atom_idx in range(self.params.number_of_atoms):
         #         u = current_quantiles_gathered[batch_idx, atom_idx] - sorted_target[batch_idx, atom_idx]
@@ -93,19 +91,22 @@ class Policy(DISTRIBUTIONAL_POLICY):
         #             multiplier = self.mid_supports[0, atom_idx]
         #
         #         loss += per_element_loss[batch_idx, atom_idx] * multiplier
+        loss = 0
+        for idx in range(self.params.number_of_atoms):
+            sorted_target_idx = sorted_target[:, idx].unsqueeze(-1).expand(-1, self.params.number_of_atoms)
+            per_element_loss = self.criterion(current_quantiles_gathered, Variable(sorted_target_idx).detach())
+            u = current_quantiles_gathered.data.cpu().numpy() - sorted_target_idx.cpu().numpy()
+            # if (u < 0)...
+            u = np.minimum(0, u)
+            u[u != 0] = 1.0
 
-        u = current_quantiles_gathered.data.cpu().numpy() - sorted_target.cpu().numpy()
-        # if (u < 0)...
-        u = np.minimum(0, u)
-        u[u != 0] = 1.0
+            cdf = np.tile(self.mid_supports, (self.params.batch_size, 1))
+            multiplier = Variable(torch.from_numpy(np.abs(cdf - u)).float())
 
-        cdf = np.tile(self.mid_supports, (self.params.batch_size, 1))
-        multiplier = Variable(torch.from_numpy(np.abs(cdf - u)).float())
+            if self.cuda:
+                multiplier = multiplier.cuda()
 
-        if self.cuda:
-            multiplier = multiplier.cuda()
-
-        loss = torch.sum(torch.mul(multiplier, per_element_loss)) / self.params.number_of_atoms
+            loss += torch.sum(torch.mul(multiplier, per_element_loss)) / self.params.number_of_atoms
 
         target_q = (Ttheta * self.support_weight).sum(1)
         td_error = (current_q - target_q).cpu().numpy()
