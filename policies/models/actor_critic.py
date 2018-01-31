@@ -12,7 +12,6 @@ class ACTOR_CRITIC(nn.Module):
     def __init__(self, n_action: int, state_size: int, value_projection_outputs: int =1):
         super(ACTOR_CRITIC, self).__init__()
         self.n_action = n_action
-        self.lstm_size = 512
 
         self.feature_extractor = nn.Sequential(
             nn.Conv2d(state_size, 32, kernel_size=8, stride=4, padding=0),  # (In Channel, Out Channel, ...)
@@ -26,13 +25,8 @@ class ACTOR_CRITIC(nn.Module):
             nn.ReLU()
         )
 
-        self.lstm = nn.LSTMCell(512, self.lstm_size)
-
-        self.lstm.bias_ih.data.fill_(0)
-        self.lstm.bias_hh.data.fill_(0)
-
-        self.v_projection = nn.Linear(self.lstm_size, value_projection_outputs)
-        self.policy_projection = nn.Linear(self.lstm_size, self.n_action)
+        self.v_projection = nn.Linear(512, self.n_action * value_projection_outputs)
+        self.policy_projection = nn.Linear(512, self.n_action)
 
         self.softmax = nn.Softmax(dim=1)
         self.log_softmax = nn.LogSoftmax(dim=1)
@@ -40,17 +34,15 @@ class ACTOR_CRITIC(nn.Module):
         self.train()
 
     def forward(self, inputs):
-        inputs, (hx, cx) = inputs
         x = self.feature_extractor(inputs)
-        hx, cx = self.lstm(x, (hx, cx))
-        x = hx
 
         logits = self.policy_projection(x)
         policy = self.softmax(logits)
         log_policy = self.log_softmax(logits)
 
-        V = self.v_projection(x)
-        return policy, log_policy, V, (hx, cx)
+        Q = self.v_projection(x)
+        V = (Q * policy).sum(1).unsqueeze(-1)
+        return policy, log_policy, V
 
 
 class DISTRIBUTIONAL_ACTOR_CRITIC(ACTOR_CRITIC):
