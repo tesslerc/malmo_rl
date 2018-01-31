@@ -55,7 +55,7 @@ class ParallelAgentsWrapper(object):
             rewards[idx] = reward
             terminations[idx] = terminal
             # Cosmetics, used to keep the termination screen valid while other agents are not done yet.
-            if terminal or terminal is None:
+            if terminal or terminal is None or state.size == 0:
                 state = self.previous_state[idx]
             else:
                 self.previous_state[idx] = state
