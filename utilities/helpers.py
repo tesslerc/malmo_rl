@@ -65,7 +65,7 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
         policy.update_observation(rewards, terminals, terminals_due_to_timeout, success, is_train)
 
         if is_train:
-            single_log_dict = policy.train()
+            single_log_dict = policy.train(states)
         else:
             single_log_dict = {}
 
