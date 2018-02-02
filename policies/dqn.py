@@ -190,7 +190,7 @@ class Policy(AbstractPolicy):
                                                          self.params.state_size * (3 if self.params.retain_rgb else 1),
                                                          self.params.image_width, self.params.image_height))
 
-        batch_state = Variable(torch.from_numpy(batch_state)).type(self.dtype_int)
+        batch_state = Variable(torch.from_numpy(batch_state)).type(self.dtype)
         # batch_action = List[a_1, a_2, ..., a_batch_size].
         # As a tensor it has a single dimension length of batch_size. Performing unsqueeze(-1) will add a dimension at
         # the end, making the dimensions 32x1 -> [[a_1], [a_2], ..., [a_batch_size]].
