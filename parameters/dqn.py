@@ -9,7 +9,7 @@ parser.add_argument('--epsilon_decay', type=int, default=100000)
 parser.add_argument('--target_update_interval', type=int, default=1000)
 parser.add_argument('--actively_follow_target', default=False, action='store_true',
                     help='When true, instead of updating the network to the target once every N steps, it will be updated each step by the rule W = (1-alpha)*W\'+alpha*W.')
-parser.add_argument('--target_update_alpha', type=float, default=0.01)
+parser.add_argument('--target_update_alpha', type=float, default=0.125)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--replay_memory_size', type=int, default=5000)
 parser.add_argument('--prioritized_experience_replay', default=False, action='store_true')
