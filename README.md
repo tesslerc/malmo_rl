@@ -42,12 +42,12 @@ python3.6 main.py <policy> <agent> [parameters]
 
 For instance, to automatically load Malmo:
 ```
-python3.6 main.py qr-dqn single_room --number_of_atoms 200 --number_of_agents 1 --retain_rgb --save_name qr-dqn-test
+python3.6 main.py qr_dqn single_room --number_of_atoms 200 --number_of_agents 1 --retain_rgb --save_name qr-dqn-test
 ```
 
 A more robust solution is to open Malmo externally and provide the ports (default port for Malmo is 10000):
 ```
-python3.6 main.py qr-dqn single_room --number_of_atoms 200 --number_of_agents 1 --malmo_ports 10000 --retain_rgb --save_name qr-dqn-test
+python3.6 main.py qr_dqn single_room --number_of_atoms 200 --number_of_agents 1 --malmo_ports 10000 --retain_rgb --save_name qr-dqn-test
 ```
 
 ### Disclaimer
