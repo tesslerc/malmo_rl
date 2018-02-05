@@ -150,10 +150,11 @@ class Policy(AbstractPolicy):
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
                 values = np.eye(len(self.action_mapping))
-                self.params.viz.bar(X=values, win='distribution_agent_' + str(idx),
+                self.params.viz.bar(X=values, win='plot_agent_' + str(idx),
                                     Y=q_values[idx].numpy(),
                                     opts=dict(
-                                        title='Agent ' + str(idx) + '\'s distribution',
+                                        title='Agent ' + str(idx) + '\'s expected Q values',
+                                        xlabel='Value',
                                         stacked=False,
                                         legend=self.action_mapping
                                     ))

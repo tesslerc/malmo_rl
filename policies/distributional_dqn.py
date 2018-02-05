@@ -72,10 +72,12 @@ class Policy(DQN_Policy):
         if self.params.viz is not None:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
-                self.params.viz.bar(X=distributions.cpu().numpy()[idx, :, :].T, win='distribution_agent_' + str(idx),
+                self.params.viz.bar(X=distributions.cpu().numpy()[idx, :, :].T, win='plot_agent_' + str(idx),
                                     Y=self.atom_values.cpu().numpy(),
                                     opts=dict(
-                                        title='Agent ' + str(idx) + '\'s distribution',
+                                        title='Agent ' + str(idx) + '\'s P.D.F',
+                                        xlabel='Value',
+                                        ylabel='Probability',
                                         stacked=False,
                                         legend=self.action_mapping
                                     ))

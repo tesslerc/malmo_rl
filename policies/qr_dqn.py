@@ -38,10 +38,12 @@ class Policy(DISTRIBUTIONAL_POLICY):
 
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
-                self.params.viz.line(X=supports[idx, :, :].T, win='cdf_agent_' + str(idx),
+                self.params.viz.line(X=supports[idx, :, :].T, win='plot_agent_' + str(idx),
                                     Y=cdf.T,
                                     opts=dict(
-                                        title='Agent ' + str(idx) + '\'s distribution',
+                                        title='Agent ' + str(idx) + '\'s C.D.F',
+                                        xlabel='Value',
+                                        ylabel='Cumulative probability',
                                         stacked=False,
                                         legend=self.action_mapping
                                     ))
