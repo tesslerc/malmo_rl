@@ -30,7 +30,7 @@ class ParallelAgentsWrapper(object):
             self.previous_state = [np.zeros(
                 (self.params.image_width, self.params.image_height)) for _ in range(self.params.number_of_agents)]
 
-    def perform_actions(self, actions: List[str]):
+    def perform_actions(self, actions: List[str], is_train: bool):
         rewards = [None for _ in range(self.params.number_of_agents)]
         terminations = [None for _ in range(self.params.number_of_agents)]
         states = [None for _ in range(self.params.number_of_agents)]
@@ -44,7 +44,7 @@ class ParallelAgentsWrapper(object):
         threads = []
         for idx, agent in enumerate(self.agents):
             threads.append(threading.Thread(target=self.agent_perform_action,
-                                            args=(agent, actions[idx], idx, results_queue)))
+                                            args=(agent, actions[idx], idx, results_queue, is_train)))
             threads[-1].start()
 
         for thread in threads:
@@ -65,9 +65,9 @@ class ParallelAgentsWrapper(object):
 
         return rewards, terminations, states, terminations_due_to_timeout, successful_agents
 
-    def agent_perform_action(self, agent, action, idx, results_queue):
+    def agent_perform_action(self, agent, action, idx, results_queue, is_train):
         if self.agent_running[idx]:
-            reward, terminal, state, terminal_due_to_timeout, success = agent.perform_action(action)
+            reward, terminal, state, terminal_due_to_timeout, success = agent.perform_action(action, is_train)
             if terminal or terminal_due_to_timeout:
                 self.agent_running[idx] = False
         else:

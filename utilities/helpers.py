@@ -43,14 +43,14 @@ def play_full_episode(agents: ParallelAgentsWrapper, policy: Policy, step: int, 
     checkpoint_reached = False
     epoch_reward = 0
     rewards, terminals, states, terminals_due_to_timeout, success = agents.perform_actions(
-        ['new game' for _ in range(params.number_of_agents)])  # Restart all the agents.
+        ['new game' for _ in range(params.number_of_agents)], is_train)  # Restart all the agents.
 
     log_dict = {}
     start_step = step
     successful_agents = [0 for _ in range(params.number_of_agents)]
     while not all([t or t is None for t in terminals]):  # Loop ends only when all agents have terminated.
         action = policy.get_action(states, is_train)
-        rewards, terminals, states, terminals_due_to_timeout, success = agents.perform_actions(action)
+        rewards, terminals, states, terminals_due_to_timeout, success = agents.perform_actions(action, is_train)
 
         # reward is a list. Passing it to update_observation changes its values hence all references should be
         # performed prior to calling update_observation.

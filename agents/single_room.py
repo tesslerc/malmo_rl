@@ -15,7 +15,9 @@ class Agent(BaseAgent):
         self.experiment_id: str = 'simple_room'
         self.reward_from_success = 0
 
-    def _restart_world(self) -> None:
+    def _restart_world(self, is_train: bool) -> None:
+        del is_train
+
         self._initialize_malmo_communication()
 
         mission_file = './agents/domains/basic.xml'

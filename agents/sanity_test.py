@@ -24,10 +24,12 @@ class Agent(BaseAgent):
         self.state = 0
         self.steps = 0
 
-    def _restart_world(self) -> None:
+    def _restart_world(self, is_train: bool) -> None:
+        del is_train
+
         self.state = 0
 
-    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool, bool]:
+    def perform_action(self, action_command: str, is_train) -> Tuple[float, bool, np.ndarray, bool, bool]:
         if self.params.retain_rgb:
             zeros_matrix = np.zeros((3, 84, 84)).astype(float)
             ones_matrix = np.zeros((3, 84, 84)).astype(float)
@@ -36,10 +38,14 @@ class Agent(BaseAgent):
             zeros_matrix = np.zeros((84, 84)).astype(float)
             ones_matrix = np.ones((84, 84)).astype(float)
 
+        if action_command == 'new game':
+            self._restart_world(is_train)
+            return 0, False, zeros_matrix, False, False
+
         random_reward = min(max(np.random.normal(-1, 0.1), -2), 0)
 
         self.steps += 1
-        if self.steps >= 100:
+        if self.steps >= 10:
             self.steps = 0
             self.state = 0
             return -1, True, ones_matrix, True, False

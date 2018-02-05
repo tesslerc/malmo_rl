@@ -106,7 +106,7 @@ class Agent(ABC):
         os.chdir(working_directory)
 
     @abstractmethod
-    def _restart_world(self) -> None:
+    def _restart_world(self, is_train: bool) -> None:
         # Restart world is called upon new mission (new game, mission stuck, agent dead, etc...).
         pass
 
@@ -151,14 +151,14 @@ class Agent(ABC):
                 return False
         return True
 
-    def perform_action(self, action_command: str) -> Tuple[float, bool, np.ndarray, bool, bool]:
+    def perform_action(self, action_command: str, is_train: bool) -> Tuple[float, bool, np.ndarray, bool, bool]:
         # Returns: reward, terminal, state, terminal due to timeout, success
         assert (action_command in self.supported_actions)
         number_of_attempts = 0
         logging.debug('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
         while True:
             if action_command == 'new game':
-                self._restart_world()
+                self._restart_world(is_train)
                 reward, terminal, state, world_state, action_succeeded = self._get_new_state(True)
                 if action_succeeded:
                     return self._manual_reward_and_terminal(action_command, reward, terminal, state, world_state)
