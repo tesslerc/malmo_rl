@@ -27,12 +27,12 @@ class ReplayMemory(object):
         self.memory: List[slim_observation] = [None for _ in range(self.memory_size)]
         self.elements_in_memory = 0
         self.insert_index = 0
+        self.step = 0
 
         # Success memory will only contain trajectories which lead to a successful finish of the task.
         if self.params.success_replay_memory:
             self.success_memory: List[slim_observation] = [None for _ in range(self.success_memory_size)]
             self.maximal_success_trajectory = 10  # For trajectories longer, we will keep only the last X steps.
-            self.success_sample_probability = 0.1  # 10% chance to sample from the success memory.
             self.elements_in_success_memory = 0
             self.success_insert_index = 0
 
@@ -89,6 +89,7 @@ class ReplayMemory(object):
     def sample(self):
         # Returns: Tuple[states, actions, rewards, termination values, next states, indices]
         mini_batch = []
+        self.step += 1
 
         if self.params.prioritized_experience_replay:
             training_samples = self._sample_proportional(self.batch_size)
@@ -96,7 +97,9 @@ class ReplayMemory(object):
             training_samples = np.random.randint(low=(self.params.state_size - 1), high=(self.elements_in_memory - 1),
                                                  size=self.batch_size)
         for index in range(self.batch_size):
-            if not self.params.success_replay_memory or np.random.rand() > self.success_sample_probability or \
+            success_sample_probability = self.params.srm_start * (1 - min(1, self.step * 1.0 / self.params.srm_decay)) \
+                                         + self.params.srm_end * min(1, self.step * 1.0 / self.params.srm_decay)
+            if not self.params.success_replay_memory or np.random.rand() > success_sample_probability or \
                     self.elements_in_success_memory < self.params.state_size:
                 memory = self.memory
 
