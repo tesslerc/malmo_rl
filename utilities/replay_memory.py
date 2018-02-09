@@ -99,11 +99,12 @@ class ReplayMemory(object):
                                                  size=self.batch_size)
         for index in range(self.batch_size):
 
-            success_sample_probability = self.params.srm_start * (1 - min(1, self.step * 1.0 / self.params.srm_decay)) \
-                                         + self.params.srm_end * min(1, self.step * 1.0 / self.params.srm_decay)
-            if success_sample_probability == 0:
-                # Once success chance has reached 0, delete in order to consume less memory.
-                del self.success_memory
+            if self.params.srm_decay == 0:
+                success_sample_probability = self.params.srm_end
+            else:
+                success_sample_probability = self.params.srm_start * (1 - min(1, self.step * 1.0 /
+                                                                              self.params.srm_decay)) \
+                                             + self.params.srm_end * min(1, self.step * 1.0 / self.params.srm_decay)
 
             if not self.params.success_replay_memory or np.random.rand() > success_sample_probability or \
                     self.elements_in_success_memory < self.params.state_size:
