@@ -99,7 +99,8 @@ class ReplayMemory(object):
                                                  size=self.batch_size)
         for index in range(self.batch_size):
 
-            success_sample_probability = self.params.srm_start * (1 - min(1, self.step * 1.0 / self.params.srm_decay)) \
+            success_sample_probability = self.params.srm_start if self.params.srm_decay == 0 else \
+                                         self.params.srm_start * (1 - min(1, self.step * 1.0 / self.params.srm_decay)) \
                                          + self.params.srm_end * min(1, self.step * 1.0 / self.params.srm_decay)
             if success_sample_probability == 0:
                 # Once success chance has reached 0, delete in order to consume less memory.
