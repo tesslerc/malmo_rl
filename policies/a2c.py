@@ -52,7 +52,7 @@ class Policy(DQN_POLICY):
         return string_actions
 
     def sample_action(self):
-        torch_state = torch.from_numpy(self.current_state).type(self.dtype_int)
+        torch_state = torch.from_numpy(self.current_state).type(self.dtype)
 
         probs, _, _ = self.target_model((Variable(torch_state)))
 
