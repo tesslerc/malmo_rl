@@ -24,7 +24,7 @@ class Policy(DQN_POLICY):
 
         if self.params.viz is not None:
             # Send screen of each agent to visdom.
-            images = np.zeros((self.params.number_of_agents, 3, 84, 84))
+            images = np.zeros((self.params.number_of_agents, 3, self.params.image_width, self.params.image_height))
             for idx in range(self.params.number_of_agents):
                 if self.params.retain_rgb:
                     images[idx, :, :, :] = states[idx]
@@ -45,6 +45,7 @@ class Policy(DQN_POLICY):
 
         if is_train:
             self.previous_actions, self.previous_states = actions, states
+            self.update_target_network()
 
         string_actions = []
         for action in actions:
@@ -52,9 +53,9 @@ class Policy(DQN_POLICY):
         return string_actions
 
     def sample_action(self):
-        torch_state = torch.from_numpy(self.current_state).type(self.dtype_int)
+        torch_state = torch.from_numpy(self.current_state).type(self.dtype)
 
-        probs, _, _ = self.target_model((Variable(torch_state)))
+        probs, _, _ = self.model((Variable(torch_state, volatile=True)))
 
         actions = probs.multinomial()
 
@@ -62,10 +63,11 @@ class Policy(DQN_POLICY):
         if self.params.viz is not None:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
-                self.params.viz.bar(X=np.diag(probs[idx].numpy()), win='distribution_agent_' + str(idx),
+                self.params.viz.bar(X=np.diag(probs[idx].numpy()), win='plot_agent_' + str(idx),
                                     Y=np.ones_like(probs[idx].numpy()),
                                     opts=dict(
-                                        title='Agent ' + str(idx) + '\'s distribution',
+                                        title='Agent ' + str(idx) + '\'s policy',
+                                        ylabel='Probability',
                                         stacked=False,
                                         legend=self.action_mapping
                                     ))
@@ -83,7 +85,7 @@ class Policy(DQN_POLICY):
         # Calculate 1 step V expectation: V'(s) = r + gamma * V(s+1).
         # Loss is: 0.5*(current_v_values - target_v_values)^2.
         # TD error is: current_q_values - target_q_values.
-        _, _, next_v = self.target_model(batch_next_state)
+        _, _, next_v = self.model(batch_next_state)
         next_v = next_v.mul(not_done_mask.unsqueeze(-1))
 
         target_v = batch_reward.unsqueeze(-1) + (self.params.gamma * next_v)
