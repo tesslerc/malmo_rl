@@ -35,7 +35,7 @@ class Policy(AbstractPolicy):
 
         if self.params.viz is not None:
             # Send screen of each agent to visdom.
-            images = np.zeros((self.params.number_of_agents, 3, 84, 84))
+            images = np.zeros((self.params.number_of_agents, 3, self.params.image_width, self.params.image_height))
             for idx in range(self.params.number_of_agents):
                 if self.params.retain_rgb:
                     images[idx, :, :, :] = states[idx]
