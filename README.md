@@ -17,6 +17,7 @@
 * Two new signals are available that do not exist in previous works.
   * Success - since the problems in Minecraft have a defined goal, unlike ATARI, we can leverage this signal for better and faster learning (you can decide not to use this, and disable it via the Agent interface).
   * Timeout - to ensure the agent isn't stuck in an infinite loop and to help with better exploration, we terminate after T timesteps. This termination, for most policies, is a non-markovian signal. Since this is meant to help learning and not damage it, the replay memory will not sample tuples `(s, a, r, t, s')` where `t` is a termination signal due to timeout.
+* While visualization can help debugging and provide a better understanding of the agent, it has a large (negative) impact on the run time.
 
 ### Policies out of the box
 This package comes with several prebuilt policies:
