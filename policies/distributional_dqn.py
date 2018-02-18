@@ -8,37 +8,10 @@ from random import random
 import numpy as np
 import torch
 from torch.autograd import Variable
+from torch import optim
 
 from policies.dqn import Policy as DQN_Policy
 from policies.models.distributional_dqn import DISTRIBUTIONAL_DQN
-
-
-def zeros_like(x):
-    assert x.__class__.__name__.find('Variable') != -1 or x.__class__.__name__.find(
-        'Tensor') != -1, "Object is neither a Tensor nor a Variable"
-
-    y = torch.zeros(x.size())
-    if x.is_cuda:
-        y = y.cuda()
-
-    if x.__class__.__name__ == 'Variable':
-        return torch.autograd.Variable(y, requires_grad=x.requires_grad)
-    elif x.__class__.__name__.find('Tensor') != -1:
-        return torch.zeros(y)
-
-
-def ones_like(x):
-    assert x.__class__.__name__.find('Variable') != -1 or x.__class__.__name__.find(
-        'Tensor') != -1, "Object is neither a Tensor nor a Variable"
-
-    y = torch.ones(x.size())
-    if x.is_cuda:
-        y = y.cuda()
-
-    if x.__class__.__name__ == 'Variable':
-        return torch.autograd.Variable(y, requires_grad=x.requires_grad)
-    elif x.__class__.__name__.find('Tensor') != -1:
-        return torch.ones(y)
 
 
 class Policy(DQN_Policy):
@@ -50,6 +23,7 @@ class Policy(DQN_Policy):
         self.atom_values = torch.linspace(self.params.min_q_value, self.params.max_q_value, self.params.number_of_atoms)
         if self.cuda:
             self.atom_values = self.atom_values.cuda()
+        self.optimizer = optim.Adam(self.target_model.parameters(), lr=self.params.lr)
 
     def create_model(self) -> torch.nn.Module:
         return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms,
@@ -69,7 +43,7 @@ class Policy(DQN_Policy):
         else:
             actions = q_values.max(1)[1]
 
-        if self.params.viz is not None:
+        if self.params.viz is not None and self.step % self.params.visualization_frequency == 0:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
                 self.params.viz.bar(X=distributions.cpu().numpy()[idx, :, :].T, win='plot_agent_' + str(idx),

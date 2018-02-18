@@ -13,7 +13,6 @@ import agents.malmo_dependencies.MalmoPython as MalmoPython
 import numpy as np
 from PIL import Image
 
-
 # TODO: Refactor error checking code to be more secure and robust!
 
 
@@ -59,6 +58,9 @@ class Agent(ABC):
         self.action_retry_threshold = 10
 
         self.game_running = False
+
+    def get_supported_actions(self):
+        return self.supported_actions
 
     def _initialize_malmo_communication(self):
         logging.debug('Agent[' + str(self.agent_index) + ']: Initializing Malmo communication.')

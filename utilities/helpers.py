@@ -108,3 +108,18 @@ def vis_plot(viz, log_dict: Dict[str, List[Tuple[int, float]]]):
                                    ytickmax=max_value,
                                    ytickmin=min_value),
                          update='append')'''
+
+
+def viz(params, train_log_dict, eval_log_dict):
+    if params.no_visualization:
+        viz = None
+    else:
+        from visdom import Visdom
+        viz = Visdom(env=params.save_name)
+        logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
+        logging.info('then head over to http://localhost:8097')  # open this address on browser
+
+        if params.resume:
+            vis_plot(viz, train_log_dict)
+            vis_plot(viz, eval_log_dict)
+    return viz

@@ -53,25 +53,15 @@ else:
                                                          'max_episode_reward_mva': []}
 
 params.platform = helpers.get_os()
-if params.no_visualization:
-    viz = None
-else:
-    from visdom import Visdom
-    viz = Visdom(env=params.save_name)
-    logging.info('To view results, run \'python -m visdom.server\'')  # activate visdom server on bash
-    logging.info('then head over to http://localhost:8097')  # open this address on browser
-
-    if params.resume:
-        helpers.vis_plot(viz, train_log_dict)
-        helpers.vis_plot(viz, eval_log_dict)
-
-params.viz = viz
+params.viz = helpers.viz(params, train_log_dict, eval_log_dict)
 
 agents = ParallelAgentsWrapper(Agent, params)
+params.available_actions = agents.agents[0].get_supported_actions()
 policy = Policy(params)
 
 start_time = time.clock()
 start_step = step  # Not equal to zero when resuming from checkpoint.
+
 while step < params.max_steps:
     prev_step = step
     agents, step, eval_required, checkpoint_reached, _, _, episode_log_dict = helpers.play_full_episode(agents, policy,
@@ -148,5 +138,5 @@ while step < params.max_steps:
             pickle.dump(checkpoint, f, pickle.HIGHEST_PROTOCOL)
         policy.save_state()
 
-        params.viz = viz
+        params.viz = helpers.viz(params, train_log_dict, eval_log_dict)
         logging.info('Saved checkpoint to: saves/' + params.save_name)

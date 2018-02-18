@@ -32,7 +32,7 @@ class Policy(DISTRIBUTIONAL_POLICY):
         else:
             actions = q_values.max(1)[1]
 
-        if self.params.viz is not None:
+        if self.params.viz is not None and self.step % self.params.visualization_frequency == 0:
             supports = quantiles.sort()[0].cpu().numpy()
             cdf = np.tile(self.cdf, (len(self.action_mapping), 1))
 

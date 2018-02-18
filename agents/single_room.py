@@ -15,6 +15,14 @@ class Agent(BaseAgent):
         self.experiment_id: str = 'simple_room'
         self.reward_from_success = 0
 
+        self.supported_actions = [
+            'move 1',
+            'move -1',
+            'turn -1',
+            'turn 1',
+            'new game'
+        ]
+
     def _restart_world(self, is_train: bool) -> None:
         del is_train
 

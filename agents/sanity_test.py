@@ -24,6 +24,13 @@ class Agent(BaseAgent):
         self.state = 0
         self.steps = 0
 
+        self.supported_actions = [
+            '1',
+            '2',
+            '3',
+            'new game'
+        ]
+
     def _restart_world(self, is_train: bool) -> None:
         del is_train
 
@@ -51,14 +58,14 @@ class Agent(BaseAgent):
             return -1, True, ones_matrix, True, False
 
         if self.state == 0:
-            if action_command == 'turn 1':
+            if action_command == '3':
                 self.state = 1
                 return random_reward, False, ones_matrix, False, False
             else:
                 return random_reward, False, zeros_matrix, False, False
         else:  # self.state == 1
             self.state = 0
-            if action_command == 'move 1':
+            if action_command == '1':
                 self.steps = 0
                 return 0, True, zeros_matrix, False, True
             else:

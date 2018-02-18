@@ -83,7 +83,7 @@ class Policy(AbstractPolicy):
                      self.params.image_height), dtype=np.float32)
 
     def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
-        if self.params.viz is not None:
+        if self.params.viz is not None and self.step % self.params.visualization_frequency == 0:
             # Send screen of each agent to visdom.
             images = np.zeros((self.params.number_of_agents, 3, self.params.image_width, self.params.image_height))
             for idx in range(self.params.number_of_agents):
@@ -136,7 +136,7 @@ class Policy(AbstractPolicy):
         else:
             actions = q_values.max(1)[1]
 
-        if self.params.viz is not None:
+        if self.params.viz is not None and self.step % self.params.visualization_frequency == 0:
             # Send Q distribution of each agent to visdom.
             for idx in range(self.params.number_of_agents):
                 values = np.eye(len(self.action_mapping))
