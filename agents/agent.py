@@ -155,7 +155,7 @@ class Agent(ABC):
 
     def perform_action(self, action_command: str, is_train: bool) -> Tuple[float, bool, np.ndarray, bool, bool]:
         # Returns: reward, terminal, state, terminal due to timeout, success
-        assert (action_command in self.supported_actions)
+        assert (action_command in self.supported_actions or action_command == 'new game')
         number_of_attempts = 0
         logging.debug('Agent[' + str(self.agent_index) + ']: received command ' + action_command)
         while True:

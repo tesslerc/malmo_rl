@@ -19,8 +19,7 @@ class Agent(BaseAgent):
             'move 1',
             'move -1',
             'turn -1',
-            'turn 1',
-            'new game'
+            'turn 1'
         ]
 
     def _restart_world(self, is_train: bool) -> None:

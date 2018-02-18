@@ -27,8 +27,7 @@ class Agent(BaseAgent):
         self.supported_actions = [
             '1',
             '2',
-            '3',
-            'new game'
+            '3'
         ]
 
     def _restart_world(self, is_train: bool) -> None:
