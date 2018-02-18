@@ -3,6 +3,8 @@ import argparse
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('policy', nargs=1)
 parser.add_argument('agent', nargs=1)
+parser.add_argument('--gym_env', type=str, default='Breakout-v0',
+                    help='Gym env to run. Only relevant if agent equals \'gym\'.')
 parser.add_argument('--malmo_ports', type=int, nargs='+', default=None,
                     help='If an existing instance of Malmo exists, this provides the port to communicate with it. If not sure - leave flag unused and a Malmo instance will be brought up automatically. Multiple ports are space separated.')
 parser.add_argument('--number_of_agents', type=int, default=1,
