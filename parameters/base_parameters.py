@@ -10,8 +10,8 @@ parser.add_argument('--malmo_ports', type=int, nargs='+', default=None,
 parser.add_argument('--number_of_agents', type=int, default=1,
                     help='Number of agents to run in parallel, all use the same policy. This is used to increase the number of observation samples obtained over time.')
 parser.add_argument('--max_steps', type=int, default=2000000)
-parser.add_argument('--eval_frequency', type=int, default=1000)
-parser.add_argument('--eval_steps', type=int, default=100)
+parser.add_argument('--eval_frequency', type=int, default=10000)
+parser.add_argument('--eval_steps', type=int, default=1000)
 parser.add_argument('--image_width', type=int, default=84)
 parser.add_argument('--image_height', type=int, default=84)
 parser.add_argument('--retain_rgb', default=False, action='store_true')
