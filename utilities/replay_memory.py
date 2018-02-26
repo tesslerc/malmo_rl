@@ -13,7 +13,7 @@ from utilities.segment_tree import SumSegmentTree
 #   reward:   r_(t+1) (reward received due to being at state s_t and performing action a_t which transitions to state
 #                       s_(t+1))
 #   terminal: t_(t+1) (whether or not the next state is a terminal state)
-slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, terminal_due_to_timeout, success')
+slim_observation = namedtuple('slim_observation', 'state, action, reward, terminal, valid_observation, success')
 observation = namedtuple('observation', 'state, action, reward, terminal, next_state, index_in_memory')
 
 
@@ -23,7 +23,7 @@ class ReplayMemory(object):
         self.memory_size = params.replay_memory_size
         self.success_memory_size = int(self.memory_size * 0.1)  # 10% of the size of the main memory.
         self.batch_size = params.batch_size
-        self.state_size = params.state_size
+        self.hist_len = params.hist_len
         self.memory: List[slim_observation] = [None for _ in range(self.memory_size)]
         self.success_memory: List[slim_observation] = None
         self.elements_in_memory = 0
@@ -48,17 +48,17 @@ class ReplayMemory(object):
             self._max_priority = 1.0
 
     def add_observation(self, state: object, action: int, reward: float, terminal: int,
-                        terminal_due_to_timeout: bool, success: bool) -> None:
+                        valid_observation: bool, success: bool) -> None:
         self.memory[self.insert_index] = slim_observation(state=state, action=action, reward=reward, terminal=terminal,
-                                                          terminal_due_to_timeout=terminal_due_to_timeout,
+                                                          valid_observation=valid_observation,
                                                           success=success)
 
         if self.params.prioritized_experience_replay:
             # Update values in Sum and Min trees (Prioritized ER). To ensure all observations are sampled at least once,
             # they are initially set to maximal priority.
             priority = (self._max_priority + self.epsilon) ** self.alpha
-            if self.insert_index < self.params.state_size:
-                # We want to make sure that the minimal sampled index will be state_size to ensure we can build a full
+            if self.insert_index < self.params.hist_len:
+                # We want to make sure that the minimal sampled index will be hist_len to ensure we can build a full
                 # state.
                 priority = 0.0
             self._it_sum[self.insert_index] = priority
@@ -95,10 +95,11 @@ class ReplayMemory(object):
         if self.params.prioritized_experience_replay:
             training_samples = self._sample_proportional(self.batch_size)
         else:
-            training_samples = np.random.randint(low=(self.params.state_size - 1), high=(self.elements_in_memory - 1),
+            training_samples = np.random.randint(low=(self.params.hist_len - 1), high=(self.elements_in_memory - 1),
                                                  size=self.batch_size)
         for index in range(self.batch_size):
 
+            # Calculate probability of sampling from success replay memory.
             if self.params.srm_decay == 0:
                 success_sample_probability = self.params.srm_end
             else:
@@ -107,29 +108,30 @@ class ReplayMemory(object):
                                              + self.params.srm_end * min(1, self.step * 1.0 / self.params.srm_decay)
 
             if not self.params.success_replay_memory or np.random.rand() > success_sample_probability or \
-                    self.elements_in_success_memory < self.params.state_size:
+                    self.elements_in_success_memory < self.params.hist_len:
                 memory = self.memory
 
-                while memory[training_samples[index]].terminal_due_to_timeout or \
-                        training_samples[index] < self.params.state_size:
+                while not memory[training_samples[index]].valid_observation or \
+                        training_samples[index] < self.params.hist_len:
+                    # Invalid observations are for instance states in which we terminate due to timeout.
                     # We do not learn from termination states due to timeout. Timeout is an artificial addition to make
                     # sure episodes end and the train/test procedure continues.
-                    # Also make sure all samples are in the range [self.params.state_size, self.elements_in_memory - 1]
+                    # Also make sure all samples are in the range [self.params.hist_len, self.elements_in_memory - 1]
                     # to ensure that we can always build the first state and the next state.
                     if self.params.prioritized_experience_replay:
                         training_samples[index] = self._sample_proportional(1)[0]
                     else:
-                        training_samples[index] = np.random.randint(low=(self.params.state_size - 1),
+                        training_samples[index] = np.random.randint(low=(self.params.hist_len - 1),
                                                                     high=(self.elements_in_memory - 1), size=1)
 
                 sample_index = training_samples[index]
             else:
                 memory = self.success_memory
                 training_samples[index] = -1
-                sample_index = np.random.randint(low=(self.params.state_size - 1),
+                sample_index = np.random.randint(low=(self.params.hist_len - 1),
                                                  high=(self.elements_in_success_memory - 1))
-                while memory[sample_index].terminal_due_to_timeout:
-                    sample_index = np.random.randint(low=(self.params.state_size - 1),
+                while not memory[sample_index].valid_observation:
+                    sample_index = np.random.randint(low=(self.params.hist_len - 1),
                                                      high=(self.elements_in_success_memory - 1))
 
             obs = memory[sample_index]
@@ -151,7 +153,7 @@ class ReplayMemory(object):
         # Final observation should be added prior to the loop, to ensure proper state buildup.
         state.insert(0, memory[final_index].state)
         saw_terminal = False
-        for i in range(1, self.params.state_size):
+        for i in range(1, self.params.hist_len):
             # Once we encounter a terminal state, this means we are wrapping around to a previous trajectory.
             # States are start-zero-padded given they are the start of the trajectory.
             if memory[final_index - i].terminal:
@@ -179,6 +181,10 @@ class ReplayMemory(object):
 
 
 class ParallelReplayMemory(ReplayMemory):
+    """
+        Parallel replay memory stores a running trajectory of observations for each running agent.
+        Once the agent has finished, it will inject the trajectory into the shared replay memory.
+    """
     def __init__(self, params: argparse) -> None:
         super(ParallelReplayMemory, self).__init__(params)
 
@@ -189,7 +195,7 @@ class ParallelReplayMemory(ReplayMemory):
         self.agents_observations = [[] for _ in range(self.params.number_of_agents)]
 
     def add_observation(self, state, action: List[int], reward: List[float], terminal: List[bool],
-                        terminal_due_to_timeout: List[bool], success: List[bool]) -> None:
+                        valid_observation: List[bool], success: List[bool]) -> None:
         agents_still_playing = False
         for idx, r in enumerate(reward):
             if r is not None and terminal[idx] is not None:
@@ -197,7 +203,7 @@ class ParallelReplayMemory(ReplayMemory):
                     agents_still_playing = True
                 self.agents_observations[idx].append(
                     slim_observation(state=state[idx], action=action[idx], reward=reward[idx],
-                                     terminal=int(terminal[idx]), terminal_due_to_timeout=terminal_due_to_timeout[idx],
+                                     terminal=int(terminal[idx]), valid_observation=valid_observation[idx],
                                      success=success[idx]))
 
         # Once all agents have finished playing, insert all trajectories one after the other into the replay memory.
@@ -208,6 +214,6 @@ class ParallelReplayMemory(ReplayMemory):
                     super(ParallelReplayMemory, self).add_observation(_slim_observation.state, _slim_observation.action,
                                                                       _slim_observation.reward,
                                                                       _slim_observation.terminal,
-                                                                      _slim_observation.terminal_due_to_timeout,
+                                                                      _slim_observation.valid_observation,
                                                                       _slim_observation.success)
             self._reset_agents_observations()
