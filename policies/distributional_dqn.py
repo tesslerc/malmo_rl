@@ -27,7 +27,7 @@ class Policy(DQN_Policy):
 
     def create_model(self) -> torch.nn.Module:
         return DISTRIBUTIONAL_DQN(len(self.action_mapping), self.params.number_of_atoms,
-                                  self.params.state_size * (3 if self.params.retain_rgb else 1),
+                                  self.params.hist_len * (3 if self.params.retain_rgb else 1),
                                   not self.quantile_regression)
 
     def action_epsilon_greedy(self, epsilon: float) -> torch.LongTensor:

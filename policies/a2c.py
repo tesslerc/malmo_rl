@@ -4,9 +4,7 @@ from typing import Dict, List, Any
 
 import numpy as np
 import torch
-from torch import optim
 from torch.autograd import Variable
-from torch.distributions import Categorical
 
 from policies.models.actor_critic import ACTOR_CRITIC
 from policies.dqn import Policy as DQN_POLICY
@@ -17,7 +15,7 @@ class Policy(DQN_POLICY):
         super(Policy, self).__init__(params)
 
     def create_model(self) -> torch.nn.Module:
-        return ACTOR_CRITIC(len(self.action_mapping), self.params.state_size * (3 if self.params.retain_rgb else 1))
+        return ACTOR_CRITIC(len(self.action_mapping), self.params.hist_len * (3 if self.params.retain_rgb else 1))
 
     def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
         self.step += 1
@@ -37,7 +35,7 @@ class Policy(DQN_POLICY):
         if not self.params.retain_rgb:
             states = np.expand_dims(states, axis=1)
 
-        self.current_state[:, :(self.params.state_size - 1) * (3 if self.params.retain_rgb else 1)] = \
+        self.current_state[:, :(self.params.hist_len - 1) * (3 if self.params.retain_rgb else 1)] = \
             self.current_state[:, 1 * (3 if self.params.retain_rgb else 1):]
         self.current_state[:, -1 * (3 if self.params.retain_rgb else 1):] = states
 

@@ -13,7 +13,6 @@ from policies.models.dqn import DQN
 from policies.policy import Policy as AbstractPolicy
 from utilities import helpers
 from utilities.replay_memory import ParallelReplayMemory
-from utilities.adamw_optimizer import AdamW
 
 
 class Policy(AbstractPolicy):
@@ -49,14 +48,14 @@ class Policy(AbstractPolicy):
         self.previous_states: np.ndarray = None
 
         self.current_state: np.ndarray = np.zeros(
-            (self.params.number_of_agents, self.params.state_size * (3 if self.params.retain_rgb else 1),
+            (self.params.number_of_agents, self.params.hist_len * (3 if self.params.retain_rgb else 1),
              self.params.image_width, self.params.image_height), dtype=np.float32)
 
         if params.resume:
             self.load_state()
 
     def create_model(self) -> torch.nn.Module:
-        return DQN(len(self.action_mapping), self.params.state_size * (3 if self.params.retain_rgb else 1))
+        return DQN(len(self.action_mapping), self.params.hist_len * (3 if self.params.retain_rgb else 1))
 
     def update_observation(self, rewards: List[float], terminations: List[bool],
                            terminations_due_to_timeout: List[bool], success: List[bool],
@@ -73,13 +72,14 @@ class Policy(AbstractPolicy):
                     rewards[idx] = reward * (1.0 - self.params.gamma) / max(abs(self.min_reward), abs(self.max_reward))
 
         if self.previous_actions is not None and is_train:
+            not_terminations_due_to_timeout = [not timeout for timeout in terminations_due_to_timeout]
             self.replay_memory.add_observation(self.previous_states, self.previous_actions, rewards,
-                                               terminations, terminations_due_to_timeout, success)
+                                               terminations, not_terminations_due_to_timeout, success)
 
         for idx, terminal in enumerate(terminations):
             if terminal or terminal is None:
                 self.current_state[idx] = np.zeros(
-                    (self.params.state_size * (3 if self.params.retain_rgb else 1), self.params.image_width,
+                    (self.params.hist_len * (3 if self.params.retain_rgb else 1), self.params.image_width,
                      self.params.image_height), dtype=np.float32)
 
     def get_action(self, states: List[np.ndarray], is_train: bool) -> List[str]:
@@ -98,7 +98,7 @@ class Policy(AbstractPolicy):
         if not self.params.retain_rgb:
             states = np.expand_dims(states, axis=1)
 
-        self.current_state[:, :(self.params.state_size - 1) * (3 if self.params.retain_rgb else 1)] = \
+        self.current_state[:, :(self.params.hist_len - 1) * (3 if self.params.retain_rgb else 1)] = \
             self.current_state[:, 1 * (3 if self.params.retain_rgb else 1):]
         self.current_state[:, -1 * (3 if self.params.retain_rgb else 1):] = states
 
@@ -178,7 +178,7 @@ class Policy(AbstractPolicy):
 
         batch_state, batch_action, batch_reward, batch_terminal, batch_next_state, indices = self.replay_memory.sample()
         batch_state = np.reshape(np.array(batch_state), (self.params.batch_size,
-                                                         self.params.state_size * (3 if self.params.retain_rgb else 1),
+                                                         self.params.hist_len * (3 if self.params.retain_rgb else 1),
                                                          self.params.image_width, self.params.image_height))
 
         batch_state = Variable(torch.from_numpy(batch_state)).type(self.dtype)
@@ -189,7 +189,7 @@ class Policy(AbstractPolicy):
         batch_reward = Variable(torch.from_numpy(np.array(batch_reward))).type(self.dtype)
         batch_next_state = np.reshape(np.array(batch_next_state),
                                       (self.params.batch_size,
-                                       self.params.state_size * (3 if self.params.retain_rgb else 1),
+                                       self.params.hist_len * (3 if self.params.retain_rgb else 1),
                                        self.params.image_width, self.params.image_height))
         batch_next_state = Variable(torch.from_numpy(batch_next_state)).type(self.dtype)
         # not_done_mask contains 0 for terminal states and 1 for non-terminal states.
