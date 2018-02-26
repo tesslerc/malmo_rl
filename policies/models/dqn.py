@@ -12,12 +12,12 @@ class DQN(nn.Module):
     Mnih et al. (2013) - https://arxiv.org/abs/1312.5602
     """
 
-    def __init__(self, n_action: int, state_size: int):
+    def __init__(self, n_action: int, hist_len: int):
         super(DQN, self).__init__()
         self.n_action = n_action
 
         self.sequential_model = nn.Sequential(
-            nn.Conv2d(state_size, 32, kernel_size=8, stride=4, padding=0),  # (In Channel, Out Channel, ...)
+            nn.Conv2d(hist_len, 32, kernel_size=8, stride=4, padding=0),  # (In Channel, Out Channel, ...)
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
