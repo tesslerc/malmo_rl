@@ -27,7 +27,7 @@ class Agent(BaseAgent):
 
         self._initialize_malmo_communication()
 
-        mission_file = './agents/domains/basic.xml'
+        mission_file = './agents/domains/single_room.xml'
         with open(mission_file, 'r') as f:
             logging.debug('Agent[' + str(self.agent_index) + ']: Loading mission from %s.', mission_file)
             mission_xml = f.read()

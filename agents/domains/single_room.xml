@@ -1,152 +1,83 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <Mission xmlns="http://ProjectMalmo.microsoft.com">
+  <About>
+    <Summary>Find the goal!</Summary>
+  </About>
 
-    <About>
-        <Summary>Single room domain without objects or tasks.</Summary>
-    </About>
+  <ModSettings>
+      <MsPerTick>25</MsPerTick>
+    <PrioritiseOffscreenRendering>true</PrioritiseOffscreenRendering>
+  </ModSettings>
 
-    <ModSettings>
-        <MsPerTick>5</MsPerTick>
-        <PrioritiseOffscreenRendering>true</PrioritiseOffscreenRendering>
-    </ModSettings>
+  <ServerSection>
+      <ServerInitialConditions>
+        <Time>
+          <StartTime>6000</StartTime>
+          <AllowPassageOfTime>false</AllowPassageOfTime>
+        </Time>
+        <Weather>clear</Weather>
+        <AllowSpawning>false</AllowSpawning>
+       </ServerInitialConditions>
+    <ServerHandlers>
+        <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1"/>
+      <ClassroomDecorator seed="__SEED__">
+        <specification>
+          <width>7</width>
+          <height>7</height>
+          <length>7</length>
+          <pathLength>0</pathLength>
+          <divisions>
+            <southNorth>0</southNorth>
+            <eastWest>0</eastWest>
+            <aboveBelow>0</aboveBelow>
+          </divisions>
+          <horizontalObstacles>
+            <gap>0</gap>
+            <bridge>0</bridge>
+            <door>0</door>
+            <puzzle>0</puzzle>
+            <jump>0</jump>
+          </horizontalObstacles>
+          <verticalObstacles>
+            <stairs>0</stairs>
+            <ladder>0</ladder>
+            <jump>0</jump>
+          </verticalObstacles>
+          <hintLikelihood>1</hintLikelihood>
+        </specification>
+      </ClassroomDecorator>
+      <ServerQuitWhenAnyAgentFinishes />
+    </ServerHandlers>
+  </ServerSection>
 
-    <ServerSection>
-        <ServerInitialConditions>
-            <Time>
-                <StartTime>6000</StartTime>
-            </Time>
-            <Weather>clear</Weather>
-        </ServerInitialConditions>
-        <ServerHandlers>
-            <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1"/> <!-- 1*minecraft:log2:0; -->
-            <DrawingDecorator>
-                <!-- start room 1 -->
-                <DrawCuboid x1="-100" y1="46" z1="-100" x2="100" y2="80" z2="100" type="air"/>  <!-- limits of our arena -->
-
-                <DrawBlock x="-2" y="48" z="11" type="torch" face="SOUTH"/>
-                <DrawBlock x="-2" y="48" z="9" type="torch" face="NORTH"/>
-                <DrawBlock x="2" y="48" z="11" type="torch" face="SOUTH"/>
-                <DrawBlock x="2" y="48" z="9" type="torch" face="NORTH"/>
-                <DrawBlock x="4" y="48" z="11" type="torch" face="SOUTH"/>
-                <DrawBlock x="4" y="48" z="9" type="torch" face="NORTH"/>
-                <DrawBlock x="6" y="48" z="11" type="torch" face="SOUTH"/>
-                <DrawBlock x="6" y="48" z="9" type="torch" face="NORTH"/>
-                <DrawBlock x="8" y="48" z="11" type="torch" face="SOUTH"/>
-                <DrawBlock x="8" y="48" z="9" type="torch" face="NORTH"/>
-
-                <!-- trees -->
-                <DrawBlock type="log" x="12" y="46" z="6"/>
-                <DrawBlock type="log" x="12" y="47" z="6"/>
-                <DrawBlock type="log" x="12" y="48" z="6"/>
-                <DrawBlock type="log" x="12" y="49" z="6"/>
-                <DrawCuboid x1="11" y1="49" z1="5" x2="13" y2="52" z2="7" type="leaves" variant="oak"/>
-
-
-                <DrawBlock type="log" x="-2" y="46" z="4"/>
-                <DrawBlock type="log" x="-2" y="47" z="4"/>
-                <DrawBlock type="log" x="-2" y="48" z="4"/>
-                <DrawBlock type="log" x="-2" y="49" z="4"/>
-                <DrawCuboid x1="-3" y1="49" z1="3" x2="-1" y2="52" z2="5" type="leaves" variant="oak"/>
-
-
-                <DrawBlock type="log" x="1" y="46" z="0"/>
-                <DrawBlock type="log" x="1" y="47" z="0"/>
-                <DrawBlock type="log" x="1" y="48" z="0"/>
-                <DrawBlock type="log" x="1" y="49" z="0"/>
-                <DrawCuboid x1="0" y1="49" z1="-1" x2="2" y2="52" z2="1" type="leaves" variant="oak"/>
-
-
-                <DrawBlock type="log" x="8" y="46" z="-2"/>
-                <DrawBlock type="log" x="8" y="47" z="-2"/>
-                <DrawBlock type="log" x="8" y="48" z="-2"/>
-                <DrawBlock type="log" x="8" y="49" z="-2"/>
-                <DrawCuboid x1="7" y1="49" z1="-3" x2="9" y2="52" z2="-1" type="leaves" variant="oak"/>
-                <!-- end trees -->
-                <DrawBlock type="stone" x="-3" y="46" z="0"/>
-                <DrawBlock type="stone" x="-3" y="47" z="0"/>
-                <DrawBlock type="stone" x="-3" y="48" z="0"/>
-                <DrawBlock type="beacon" x="-3" y="49" z="0"/>
-
-                <DrawBlock type="stone" x="0" y="46" z="-2"/>
-                <DrawBlock type="stone" x="0" y="47" z="-2"/>
-                <DrawBlock type="stone" x="0" y="48" z="-2"/>
-                <DrawBlock type="beacon" x="0" y="49" z="-2"/>
-
-                <DrawBlock type="stone" x="8" y="46" z="15"/>
-                <DrawBlock type="stone" x="8" y="47" z="15"/>
-                <DrawBlock type="stone" x="8" y="48" z="15"/>
-                <DrawBlock type="beacon" x="8" y="49" z="15"/>
-
-                <DrawBlock type="stone" x="10" y="46" z="25"/>
-                <DrawBlock type="stone" x="10" y="47" z="25"/>
-                <DrawBlock type="stone" x="10" y="48" z="25"/>
-                <DrawBlock type="beacon" x="10" y="49" z="25"/>
-
-                <DrawCuboid x1="8" y1="46" z1="7" x2="8" y2="46" z2="4" type="fence"/>
-                <DrawCuboid x1="8" y1="46" z1="7" x2="4" y2="46" z2="7" type="fence"/>
-                <DrawCuboid x1="8" y1="46" z1="4" x2="4" y2="46" z2="4" type="fence"/>
-                <DrawCuboid x1="4" y1="46" z1="7" x2="4" y2="46" z2="4" type="fence"/>
-                <DrawEntity x="7" y="47" z="5" type="Pig"/>
-
-                <!-- Domain limits -->
-                <DrawCuboid x1="-6" y1="44" z1="-4" x2="12" y2="45" z2="30" type="grass"/>      					<!-- floor -->
-                <DrawCuboid x1="-5" y1="46" z1="-3" x2="11" y2="50" z2="-3" type="cobblestone" colour="MAGENTA"/> 	<!-- front wall #1 -->
-
-                <DrawCuboid x1="-5" y1="46" z1="-3" x2="-5" y2="50" z2="29" type="cobblestone" colour="MAGENTA"/>   <!-- right wall -->
-                <DrawBlock x="-2" y="48" z="12" type="torch" face="EAST"/>
-                <DrawBlock x="-2" y="48" z="14" type="torch" face="EAST"/>
-                <DrawBlock x="-2" y="48" z="16" type="torch" face="EAST"/>
-
-                <DrawCuboid x1="11" y1="46" z1="-3" x2="11" y2="50" z2="29" type="cobblestone" colour="MAGENTA"/>   <!-- left wall -->
-                <DrawBlock x="9" y="48" z="12" type="torch" face="WEST"/>
-                <DrawBlock x="9" y="48" z="14" type="torch" face="WEST"/>
-                <DrawBlock x="9" y="48" z="16" type="torch" face="WEST"/>
-                <DrawBlock x="9" y="48" z="18" type="torch" face="WEST"/>
-
-                <DrawCuboid x1="-5" y1="46" z1="29" x2="11" y2="50" z2="29" type="cobblestone" colour="MAGENTA"/>   <!-- back wall -->
-                <DrawBlock x="-1" y="48" z="22" type="torch" face="NORTH"/>
-                <DrawBlock x="1" y="48" z="22" type="torch" face="NORTH"/>
-                <DrawBlock x="3" y="48" z="22" type="torch" face="NORTH"/>
-                <DrawBlock x="5" y="48" z="22" type="torch" face="NORTH"/>
-                <DrawBlock x="7" y="48" z="22" type="torch" face="NORTH"/>
-            </DrawingDecorator>
-        </ServerHandlers>
-    </ServerSection>
-
-    <AgentSection mode="Survival">
-        <Name>Cristina</Name>
-        <AgentStart>
-            <Placement x="X_START" y="46.0" z="Z_START" pitch="0" yaw="YAW_START" />
-            <Inventory>
-                <InventoryItem slot="0" type="diamond_pickaxe"/>
-            </Inventory>
-        </AgentStart>
-        <AgentHandlers>
-            <ObservationFromRay/>
-            <ObservationFromGrid> <!-- to detect block beneath us -->
-                <Grid name="floor3x3">
-                <min x="-1" y="-2" z="-1"/>
-                <max x="1" y="0" z="1"/>
-              </Grid>
-            </ObservationFromGrid>
-            <DiscreteMovementCommands autoFall="true"/>
-            <InventoryCommands/>
-            <ChatCommands/>
-            <ObservationFromFullStats/>
-            <RewardForTouchingBlockType>
-                <Block reward="-100.0" type="lava" behaviour="onceOnly"/>
-            </RewardForTouchingBlockType>
-            <RewardForSendingCommand reward="-1"/>
-            <AgentQuitFromTouchingBlockType>
-                <Block type="lava"/>
-            </AgentQuitFromTouchingBlockType>
-            <VideoProducer>
-                <Width>800</Width>
-                <Height>600</Height>
-                <!-- Width>84</Width>
-                <Height>84</Height-->
-            </VideoProducer>
-        </AgentHandlers>
-    </AgentSection>
-
+  <AgentSection mode="Survival">
+      <Name>Cristina</Name>
+    <AgentStart>
+        <Placement x="-203.5" y="81.0" z="217.5" yaw="0"/>
+    </AgentStart>
+    <AgentHandlers>
+        <ObservationFromGrid>
+            <Grid name="floor3x3">
+                <min x="-1" y="-1" z="-1"/>
+                <max x="1" y="1" z="1"/>
+            </Grid>
+        </ObservationFromGrid>
+        <ChatCommands/>
+      <VideoProducer want_depth="false">
+        <Width>800</Width>
+        <Height>600</Height>
+      </VideoProducer>
+      <ObservationFromFullStats />
+      <DiscreteMovementCommands autoFall="true"/>
+        <RewardForMissionEnd rewardForDeath="-10000">
+            <Reward description="found_goal" reward="20"/>
+            <Reward description="command_quota_reached" reward="-5"/>
+        </RewardForMissionEnd>
+        <RewardForSendingCommand reward="-1"/>
+        <AgentQuitFromTouchingBlockType>
+            <Block type="gold_block" description="found_goal"/>
+        </AgentQuitFromTouchingBlockType>
+      <AgentQuitFromReachingCommandQuota description="command_quota_reached" total="50"/>
+    </AgentHandlers>
+  </AgentSection>
 </Mission>
